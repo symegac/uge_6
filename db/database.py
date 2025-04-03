@@ -117,7 +117,7 @@ class Database(connector.DatabaseConnector):
             *Upåkrævet*. Standardværdi: ``False``
         :type read: bool
 
-        :return: Queriet kunne eksekveres, og handlingen blev gennemført problemfrit.
+        :return: Queriet kunne eksekveres, og handlingen blev gennemført.
         :rtype: bool: ``True``
         :return: Handlingen kunne ikke gennemføres.
         :rtype: bool: ``False``
@@ -392,7 +392,8 @@ class Database(connector.DatabaseConnector):
         order: int | str = 0,
         direction: str = 'a',
         limit: int = 0,
-        offset: int = 0
+        offset: int = 0,
+        **kwargs
     ) -> list[tuple] | None:
         """
         Læser data fra en tabel.
@@ -446,7 +447,7 @@ class Database(connector.DatabaseConnector):
             for column in column_name:
                 columns.append(self._format_column(column))
             select_query += ", ".join(columns)
-        # Eller vælges alle kolonner
+        # Ellers vælges alle kolonner
         else:
             select_query += '*'
         select_query += f" FROM `{table_name}`"
@@ -456,7 +457,30 @@ class Database(connector.DatabaseConnector):
             for join in joins:
                 select_query += self._join(left=table_name, **join)
 
-        # TODO: Tilføj WHERE (og medhørende keywords, såsom AND, OR, LIKE, IN osv.?s)
+        # Tilføjer where-constraints
+        # TODO: Tilføj OR osv.?
+        # TODO: Kan dette flyttes til sin egen funktion?
+        if kwargs:
+            where_query = []
+            where_params = {}
+            # For hver kwarg ses det, om det er et WHERE keyword
+            for key, value in kwargs.items():
+                kwarg_query, kwarg_params = self._kwargs(key, value, len(where_query))
+                # Hvis ja, opbevares de resulterende query-dele og parametre
+                if kwarg_query:
+                    where_query.append(kwarg_query)
+                if kwarg_params:
+                    where_params.update(kwarg_params)
+
+            # Hvis der både er query-dele og parametre, genereres queriet, og parametrene tilføjes
+            if where_query and where_params:
+                select_query += " WHERE"
+                # Hvis der er mere end 1 query-del, sættes de sammen med AND
+                if len(where_query) > 1:
+                    select_query += " AND".join(where_query)
+                else:
+                    select_query += f" {where_query[0]}"
+                select_params.update(where_params)
 
         # Tilføjer sorteringsretning
         # quickfix: (sættes nu altid på queriet, da joins sorteres efter nyligst joinede tabel?)
@@ -472,8 +496,64 @@ class Database(connector.DatabaseConnector):
 
         result = self._execute(select_query, select_params, read=True)
         if result:
-            print(f"SUCCES: Dataene blev læst fra '{table_name}' problemfrit.")
+            print(f"SUCCES: Dataene blev læst fra '{table_name}'.")
             return result
+
+    def _kwargs(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
+        kwarg_query = f" `{value[0]}`"
+        kwarg_params = {}
+        # WHERE column_name LIKE val
+        if key.lower().startswith(("like", "lk")):
+            name = f"like_{where_count}"
+            kwarg_query += " LIKE %(" + name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name = val
+        elif key.lower().startswith("eq"):
+            name = f"equals_{where_count}"
+            kwarg_query += " = %("+ name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name BETWEEN val_low AND val_high
+        elif key.lower().startswith(("betw", "btw")):
+            name = f"between_{where_count}"
+            kwarg_query += " BETWEEN %(" + name + "_low)s AND %(" + name + "_high)s"
+            kwarg_params.update({f"{name}_low": value[1], f"{name}_high": value[2]})
+        # WHERE column_name < val
+        elif key.lower().startswith("lt"):
+            name = f"lt_{where_count}"
+            kwarg_query += " < %(" + name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name > val
+        elif key.lower().startswith("gt"):
+            name = f"gt_{where_count}"
+            kwarg_query += " > %(" + name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name <= val
+        elif key.lower().startswith("le"):
+            name = f"le_{where_count}"
+            kwarg_query += " <= %(" + name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name >= val
+        elif key.lower().startswith("ge"):
+            name = f"ge_{where_count}"
+            kwarg_query += " >= %(" + name + ")s"
+            kwarg_params.update({name: value[1]})
+        # WHERE column_name IN (val_a, val_b, val_c, val_d, ...)
+        elif key.lower().startswith("in"):
+            name = f"in_{where_count}"
+            kwarg_query += " IN ("
+            in_values = []
+            for index, val in enumerate(value[1]):
+                in_name = f"{name}_{index}"
+                in_values += "%(" + in_name + ")s"
+                kwarg_params.update({in_name: val})
+            kwarg_query += ", ".join(in_values)
+            kwarg_query += ")"
+
+        # Hvis der ikke er tilføjet nogle parametre (dvs. hvis kwarg'et er ugyldigt),
+        # så returneres en tom streng
+        if not kwarg_params:
+            kwarg_query = ''
+        return kwarg_query, kwarg_params
 
     def _sort(self, column_name: str | tuple[str], order: int | str = 0, direction: str = 'a') -> str:
         """
@@ -500,7 +580,7 @@ class Database(connector.DatabaseConnector):
         if isinstance(order, int) and order >= 0 and order < len(column_name):
             query += f" ORDER BY {self._format_column(column_name[order])}"
         elif isinstance(order, str) and order in column_name:
-            query += f" ORDER BY {self._format_column(order)}]"
+            query += f" ORDER BY {self._format_column(order)}"
         if "ORDER BY" in query:
             if direction.lower() in ['a', "asc", "ascending"]:
                 query += " ASC"
@@ -714,7 +794,7 @@ class Database(connector.DatabaseConnector):
         # Det er altid godt at bekræfte ved DELETE-operationer
         confirmation = f"Er du sikker på, at du gerne vil nulstille databasen '{self.database}'? (j/N) "
         if force or input(confirmation).lower() in ['j', 'y']:
-            # Hvis query gennemføres problemfrit, printes positivt resultat
+            # Hvis query gennemføres, printes positivt resultat
             if self._execute(drop_query):
                 print(f"SUCCES: Tabellen '{table_name}' blev fjernet.")
 
@@ -736,7 +816,7 @@ class Database(connector.DatabaseConnector):
         # Det er altid godt at bekræfte ved DELETE-operationer
         confirmation = f"Er du sikker på, at du gerne vil nulstille databasen '{self.database}'? (j/N) "
         if force or input(confirmation).lower() in ['j', 'y']:
-            # Hvis query genneføres problemfrit, printes positivt resultat
+            # Hvis query gennemføres, printes positivt resultat
             if self._execute(truncate_query):
                 print(f"SUCCES: Tabellen '{table_name}' blev ryddet for data.")
 
@@ -757,7 +837,7 @@ class Database(connector.DatabaseConnector):
         # Det er altid godt at bekræfte ved DELETE-operationer
         confirmation = f"Er du sikker på, at du gerne vil nulstille databasen '{self.database}'? (j/N) "
         if force or input(confirmation).lower() in ['j', 'y']:
-            # Hvis begge queries gennemføres problemfrit, printes positivt resultat
+            # Hvis begge queries gennemføres, printes positivt resultat
             if self._execute(drop_query) and self.create_database(self.database):
                 print(f"Databasen '{self.database}' blev nulstillet.")
                 # Skal logge ind igen for at forny forbindelserne
