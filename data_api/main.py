@@ -4,10 +4,11 @@ from fastapi import FastAPI
 from os.path import join
 
 app = FastAPI()
+data_dir = join(__file__, "..", "data")
 
-orders = pl.read_csv(join("data","orders.csv"))
-order_items = pl.read_csv(join("data","order_items.csv"))
-customers = pl.read_csv(join("data","customers.csv"))
+orders = pl.read_csv(join(data_dir,"orders.csv"))
+order_items = pl.read_csv(join(data_dir,"order_items.csv"))
+customers = pl.read_csv(join(data_dir,"customers.csv"))
 
 @app.get("/orders")
 def read_orders():

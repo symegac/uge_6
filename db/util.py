@@ -1,10 +1,7 @@
 import os.path
 
-# Ændr dette, hvis projektet skal laves om til et modul, der kan importeres
-data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-
 # TODO: Validerer ikke .csv-filens struktur endnu
-def read_csv(filename: str, data_dir: str = data_dir) -> list[str]:
+def read_csv(filename: str, data_dir: str = "data") -> list[str]:
     """
     Indlæser en *.csv*-fil og omdanner den til rådata, der kan behandles.
 
@@ -12,7 +9,7 @@ def read_csv(filename: str, data_dir: str = data_dir) -> list[str]:
         *Påkrævet*.
     :type filename: str
     :param data_dir: Mappen/kataloget, hvori .csv-filen er placeret.
-        *Påkrævet*. Standardværdi: ``data_dir``
+        *Påkrævet*. Standardværdi: ``"data"``
     :type data_dir: str
 
     :return: Den indlæste fil med hver række som en tekststreng i en liste.

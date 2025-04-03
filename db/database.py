@@ -18,6 +18,14 @@ class Database(connector.DatabaseConnector):
     :param database: Navnet på databasen, der evt. skal forbindes til.
         *Upåkrævet*. Standardværdi: ``''``
     :type database: str
+    :param host: Adressen på serveren, der forbindes til.
+        Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
+        *Upåkrævet*. Standardværdi: ``''``
+    :type host: str
+    :param port: Porten, der forbindes til.
+        Hvis tom, bruges MySQL-standarden ``"3306"``.
+        *Upåkrævet*. Standardværdi: ``''``
+    :type port: str
     :param init_load: En liste over datafiler, der ved initialisering automatisk skal
         indlæses som tabeller i databasen.
         *Upåkrævet*. Standardværdi: ``[]``
@@ -30,16 +38,16 @@ class Database(connector.DatabaseConnector):
         username: str = '',
         password: str = '',
         database: str = '',
+        host: str = '',
+        port: str = '',
         init_load: list[str] = [],
         preview: bool = True,
-        host: str = "localhost",
-        port: str = "3306"
     ) -> None:
         """
         Konstruktøren af database-objektet.
 
         :param username: Brugernavnet, der skal bruges til at logge ind med.
-        *Påkrævet*. Standardværdi: ``''``
+            *Påkrævet*. Standardværdi: ``''``
         :type username: str
         :param password: Adgangskoden, der skal bruges til at logge ind med.
             *Påkrævet*. Standardværdi: ``''``
@@ -47,6 +55,14 @@ class Database(connector.DatabaseConnector):
         :param database: Navnet på databasen, der evt. skal forbindes til.
             *Upåkrævet*. Standardværdi: ``''``
         :type database: str
+        :param host: Adressen på serveren, der forbindes til.
+            Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
+            *Upåkrævet*. Standardværdi: ``''``
+        :type host: str
+        :param port: Porten, der forbindes til.
+            Hvis tom, bruges MySQL-standarden ``"3306"``.
+            *Upåkrævet*. Standardværdi: ``''``
+        :type port: str
         :param init_load: En liste over datafiler, der ved initialisering automatisk skal
             indlæses som tabeller i databasen.
             *Upåkrævet*. Standardværdi: ``[]``
@@ -58,7 +74,7 @@ class Database(connector.DatabaseConnector):
         # Konfiguration
         self.preview = preview
         # Initialiserer connectoren
-        super().__init__(username, password, database, host)
+        super().__init__(username, password, database, host, port)
 
         # Hvis forbindelsen ikke kan skabes (f.eks. fordi det angivne databasenavn ikke eksisterer),
         # kan brugeren forsøge at oprette en database med navnet
@@ -126,7 +142,7 @@ class Database(connector.DatabaseConnector):
             if read:
                 return cursor.fetchall()
         except Exception as err:
-            print(f"FEJL: Kunne ikke udføre handlingen. Følgende fejl opstod:\n    ", err)
+            self._error("Kunne ikke eksekvere queriet.", err)
             return False
         else:
             return True
@@ -216,7 +232,7 @@ class Database(connector.DatabaseConnector):
         # Det kommer an på, om man følger en fast navngivningspraksis for kolonnerne i datasættene
         for column in header:
             create_query += f"`{column}` "
-            if column == "id":
+            if "id" in column:
                 create_query += "INTEGER NOT NULL"
             elif "name" in column:
                 create_query += "VARCHAR(80) NOT NULL"
@@ -228,8 +244,12 @@ class Database(connector.DatabaseConnector):
                 create_query += "DECIMAL(10,5) NOT NULL"
             elif "date" in column:
                 create_query += "DATETIME NOT NULL"
-            elif column in ["customer", "product"]:
+            elif column in ["customer", "product", "quantity", "zip_code", "order_status"]:
                 create_query += "INTEGER NOT NULL"
+            elif "discount" in column:
+                create_query += "DECIMAL(3,2) NOT NULL"
+            else:
+                create_query += "VARCHAR(80) NOT NULL"
 
             # if column == primary_key:
             #     create_query += " PRIMARY KEY"
@@ -288,7 +308,7 @@ class Database(connector.DatabaseConnector):
         # Tjekker om alle rækker i den inputtede dataliste har samme antal felter, som der er kolonner i den angivne tabel,
         # dvs. om længden af hver række (list[str]) er den samme som længden af headerinfoen (list[tuple])
         if not all(len(row) == len(table_info) for row in iter(rows)):
-            print("FEJL: En eller flere rækker data er uforenelig med tabellens format.")
+            self._error("En eller flere rækker data er uforenelig med tabellens format.")
             return
 
         # Danner query

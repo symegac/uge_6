@@ -1,7 +1,6 @@
 import mysql.connector
 import getpass
 
-# TODO: Kan i fremtiden udvides til også at benyttes til andre servere end localhost
 # TODO: Tilføj måde at prøve login igen, hvis forbindelse ikke kunne oprettes pga. forkert logininfo
 class DatabaseConnector:
     """
@@ -18,23 +17,47 @@ class DatabaseConnector:
         Er dette navn tomt, oprettes forbindelsen uden noget specifikt mål.
         *Upåkrævet*. Standardværdi: ``''``
     :type database: str
+    :param host: Adressen på serveren, der forbindes til.
+        Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
+        *Upåkrævet*. Standardværdi: ``''``
+    :type host: str
+    :param port: Porten, der forbindes til.
+        Hvis tom, bruges MySQL-standarden ``"3306"``.
+        *Upåkrævet*. Standardværdi: ``''``
+    :type port: str
     """
 
     def __init__(self,
         username: str = '',
         password: str = '',
         database: str = '',
-        host: str = "localhost",
-        port: str = "3306"
+        host: str = '',
+        port: str = ''
     ) -> None:
         """
         Konstruktøren af connector-objektet.
 
         Hvis info ikke gives som input i oprettelsen af objektet, kan brugeren selv indtaste det i terminalen.
-        """
-        self.host = host
-        self.port = port
 
+        :param username: Brugernavnet, der skal bruges til at logge ind med.
+            *Påkrævet*. Standardværdi: ``''``
+        :type username: str
+        :param password: Adgangskoden, der skal bruges til at logge ind med.
+            *Påkrævet*. Standardværdi: ``''``
+        :type password: str
+        :param database: Navnet på databasen, der evt. skal forbindes til.
+            Er dette navn tomt, oprettes forbindelsen uden noget specifikt mål.
+            *Upåkrævet*. Standardværdi: ``''``
+        :type database: str
+        :param host: Adressen på serveren, der forbindes til.
+            Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
+            *Upåkrævet*. Standardværdi: ``''``
+        :type host: str
+        :param port: Porten, der forbindes til.
+            Hvis tom, bruges MySQL-standarden ``"3306"``.
+            *Upåkrævet*. Standardværdi: ``''``
+        :type port: str
+        """
         if not username:
             self.username = input("Indtast brugernavn: ")
         else:
@@ -55,8 +78,23 @@ class DatabaseConnector:
         else:
             self.database = database
 
+        # Anden adresse end standarden '127.0.0.1:3306' kan defineres
+        self.host = host
+        self.port = port
+
         # Forsøger at oprette forbindelser
         self._first_login(password)
+
+    def _error(msg: str, *err: str) -> None:
+        # Ad, grim quickfix af fejl
+        if len(err) > 1:
+            msg = err[-2]
+            err = err[-1]
+
+        error_message = f"FEJL: {msg}"
+        if err:
+            error_message += f" Følgende fejl opstod:\n    {err}"
+        print(error_message)
 
     def _login(self, password: str, db: bool = True) -> mysql.connector.MySQLConnection | bool:
         """
@@ -80,17 +118,21 @@ class DatabaseConnector:
         login_params = {
             "user": self.username,
             "password": password,
-            "host": self.host
         }
         # Tilføj kun specifik database, hvis den er defineret
         if db:
             login_params["database"] = self.database
+        # Hvis disse er tomme, bruger MySQL som standard '127.0.0.1:3306'
+        if self.host:
+            login_params["host"] = self.host
+        if self.port:
+            login_params["port"] = self.port
 
         try:
             # Dict udpakkes og bruges som keyword-parametre i oprettelse af forbindelsen
             connection = mysql.connector.connect(**login_params)
         except Exception as err:
-            print("FEJL: Kunne ikke oprette forbindelsen. Følgende fejl opstod:\n    ", err)
+            self._error("Kunne ikke oprette forbindelsen.", err)
             return False
 
         return connection
@@ -121,7 +163,7 @@ class DatabaseConnector:
             self.direct_connection.connect()
             self.connection.connect()
         except Exception as err:
-            print("FEJL: Kunne ikke genoprette forbindelsen. Følgende fejl opstod:\n    ", err)
+            self._error("Kunne ikke genoprette forbindelsen.", err)
         else:
             print(f"SUCCES: Genoprettede forbindelsen til serveren og databasen '{self.database}'.")
 
@@ -137,13 +179,3 @@ class DatabaseConnector:
 if __name__ == "__main__":
     connection = DatabaseConnector()
     print(connection.connection)
-
-# Den gamle navnevalidering
-# RESERVED = ["ACCESSIBLE", "ADD", "ALL", "ALTER", "ANALYZE", "AND", "AS", "ASC", "ASENSITIVE", "BEFORE", "BETWEEN", "BIGINT", "BINARY", "BLOB", "BOTH", "BY", "CALL", "CASCADE", "CASE", "CHANGE", "CHAR", "CHARACTER", "CHECK", "COLLATE", "COLUMN", "CONDITION", "CONSTRAINT", "CONTINUE", "CONVERT", "CREATE", "CROSS", "CUBE", "CUME_DIST", "CURRENT_DATE", "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_USER", "CURSOR", "DATABASE", "DATABASES", "DAY_HOUR", "DAY_MICROSECOND", "DAY_MINUTE", "DAY_SECOND", "DEC", "DECIMAL", "DECLARE", "DEFAULT", "DELAYED", "DELETE", "DENSE_RANK", "DESC", "DESCRIBE", "DETERMINISTIC", "DISTINCT", "DISTINCTROW", "DIV", "DOUBLE", "DROP", "DUAL", "EACH", "ELSE", "ELSEIF", "EMPTY", "ENCLOSED", "ESCAPED", "EXCEPT", "EXISTS", "EXIT", "EXPLAIN", "FALSE", "FETCH", "FIRST_VALUE", "FLOAT", "FLOAT4", "FLOAT8", "FOR", "FORCE", "FOREIGN", "FROM", "FULLTEXT", "FUNCTION", "GENERATED", "GET", "GRANT", "GROUP", "GROUPING", "GROUPS", "HAVING", "HIGH_PRIORITY", "HOUR_MICROSECOND", "HOUR_MINUTE", "HOUR_SECOND", "IF", "IGNORE", "IN", "INDEX", "INFILE", "INNER", "INOUT", "INSENSITIVE", "INSERT", "INT", "INT1", "INT2", "INT3", "INT4", "INT8", "INTEGER", "INTERSECT", "INTERVAL", "INTO", "IO_AFTER_GTIDS", "IO_BEFORE_GTIDS", "IS", "ITERATE", "JOIN", "JSON_TABLE", "KEY", "KEYS", "KILL", "LAG", "LAST_VALUE", "LATERAL", "LEAD", "LEADING", "LEAVE", "LEFT", "LIKE", "LIMIT", "LINEAR", "LINES", "LOAD", "LOCALTIME", "LOCALTIMESTAMP", "LOCK", "LONG", "LONGBLOB", "LONGTEXT", "LOOP", "LOW_PRIORITY", "MASTER_BIND", "MASTER_SSL_VERIFY_SERVER_CERT", "MATCH", "MAXVALUE", "MEDIUMBLOB", "MEDIUMINT", "MEDIUMTEXT", "MIDDLEINT", "MINUTE_MICROSECOND", "MINUTE_SECOND", "MOD", "MODIFIES", "NATURAL", "NOT", "NO_WRITE_TO_BINLOG", "NTH_VALUE", "NTILE", "NULL", "NUMERIC", "OF", "ON", "OPTIMIZE", "OPTIMIZER_COSTS", "OPTION", "OPTIONALLY", "OR", "ORDER", "OUT", "OUTER", "OUTFILE", "OVER", "PARTITION", "PERCENT_RANK", "PRECISION", "PRIMARY", "PROCEDURE", "PURGE", "RANGE", "RANK", "READ", "READS", "READ_WRITE", "REAL", "RECURSIVE", "REFERENCES", "REGEXP", "RELEASE", "RENAME", "REPEAT", "REPLACE", "REQUIRE", "RESIGNAL", "RESTRICT", "RETURN", "REVOKE", "RIGHT", "RLIKE", "ROW", "ROWS", "ROW_NUMBER", "SCHEMA", "SCHEMAS", "SECOND_MICROSECOND", "SELECT", "SENSITIVE", "SEPARATOR", "SET", "SHOW", "SIGNAL", "SMALLINT", "SPATIAL", "SPECIFIC", "SQL", "SQLEXCEPTION", "SQLSTATE", "SQLWARNING", "SQL_BIG_RESULT", "SQL_CALC_FOUND_ROWS", "SQL_SMALL_RESULT", "SSL", "STARTING", "STORED", "STRAIGHT_JOIN", "SYSTEM", "TABLE", "TERMINATED", "THEN", "TINYBLOB", "TINYINT", "TINYTEXT", "TO", "TRAILING", "TRIGGER", "TRUE", "UNDO", "UNION", "UNIQUE", "UNLOCK", "UNSIGNED", "UPDATE", "USAGE", "USE", "USING", "UTC_DATE", "UTC_TIME", "UTC_TIMESTAMP", "VALUES", "VARBINARY", "VARCHAR", "VARCHARACTER", "VARYING", "VIRTUAL", "WHEN", "WHERE", "WHILE", "WINDOW", "WITH", "WRITE", "XOR", "YEAR_MONTH", "ZEROFILL"]
-# if ';' in name:
-    #     print("Illegal name! Can't contain ';'!")
-    #     quit()
-    # for word in self.RESERVED:
-    #     if f"{word} " in name.upper():
-    #         print(f"Illegal name! Can't contain MySQL reserved word {word}!")
-    #         quit()
