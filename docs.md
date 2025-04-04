@@ -55,7 +55,7 @@ Det vil sige, at formatet er
 ```
 </details>
 <details>
-<summary>Eller illustreret her:</summary>
+<summary>Eller demonstreret her:</summary>
 
 ```py
 {
@@ -100,14 +100,16 @@ Eksempel på rådata: `[(1, 'Electra'),` ... `]`
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+brands = {
     "header": { 
         "brand_id": int,
         "brand_name": str
     },
     "data": [
         { "brand_id": 1, "brand_name": "Electra" },
-        ...
+```
+...
+```
     ]
 }
 ```
@@ -116,7 +118,7 @@ Eksempel på rådata: `[(1, 'Electra'),` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `brand_id` | *int* | `\d{1}` | `int PRIMARY KEY AUTO_INCREMENT` |
+| `brand_id` | *int* | `\d` | `int PRIMARY KEY AUTO_INCREMENT` |
 | `brand_name` | *str* | `[A-z ]+` | `varchar(40) NOT NULL` |
 
 ##### Kommentarer
@@ -129,7 +131,7 @@ Eksempel på rådata: `[(1, 'Children Bicycles'),` ... `]`
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+categories = {
     "header": { 
         "category_id": int,
         "category_name": str
@@ -147,7 +149,8 @@ Eksempel på rådata: `[(1, 'Children Bicycles'),` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `category_id` | *int* | `\d` | `int PRIMARY KEY AUTO_INCREMENT` |
+| `category_name` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
 
 ##### Kommentarer
 
@@ -159,7 +162,7 @@ Eksempel på rådata: `'[{"customer_id":1,"first_name":"Debra","last_name":"Burk
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+customers = {
     "header": {
         "customer_id": int,
         "first_name": str,
@@ -199,7 +202,7 @@ Eksempel på rådata: `'[{"customer_id":1,"first_name":"Debra","last_name":"Burk
 | `last_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
 | `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` eller `NULL` | `char(14)` |
 | `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `varchar(80) NOT NULL` |
-| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+ ` | `varchar(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `varchar(80) NOT NULL` |
 | `city` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
 | `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
 | `zip_code` | *int* | `\d{5}` | `mediumint NOT NULL` |
@@ -221,14 +224,14 @@ Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+order_items = {
     "header": { 
         "order_id": int,
         "item_id": int,
         "product_id": int,
         "quantity": int,
         "list_price": decimal.Decimal,
-        "discount": float
+        "discount": decimal.Decimal
     },
     "data": [
         {
@@ -237,7 +240,7 @@ Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,
             "product_id": 20,
             "quantity": 1,
             "list_price": decimal.Decimal('599.99'),
-            "discount": 0.2
+            "discount": decimal.Decimal('0.20')
         },
 ```
 ...
@@ -250,9 +253,30 @@ Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `order_id` | *int* | `\d{1,4}` | `int NOT NULL` |
+| `item_id` | *int* | `\d` | `int NOT NULL` |
+| `product_id` | *int* | `\d{1,3}` | `int NOT NULL` |
+| `quantity` | *int* | `\d` | `int NOT NULL` |
+| `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
+| `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2)` |
 
 ##### Kommentarer
+I kolonnen `quantity` findes kun etcifrede tal, men man kunne forestille sig, at man kunne sælge f.eks. 10 reflekser el.lign., hvis virksomheden også begynder at bruge databasen til ekstraudstyr. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `smallint` istf. `tinyint`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `int`.
+
+Den højeste pris i dataene er 11999.99, der indeholder 7 cifre. Det er usandsynligt, at forretningen får en cykel med en pris på over 99999.99 dollars, så derfor er `M = 7` i `decimal(M,D)`. For alligevel at være på den sikre side, sætter jeg dog `M = 8`. Da dollaren deles i 100 underenheder (cent), har alle priserne kun 2 decimaler (.00 til .99), og derfor ender vi på `decimal(7,2)`. Når priserne i tabellen er heltal, angives ingen decimaltal. Ved konvertering til `decimal.Decimal` kan man bruge `.quantize(decimal.Decimal("1.00"))` til at sørge for, at heltallene også har præcis to decimaler.
+
+Rabatten i tabellen er altid en procent i decimalform, og der er aldrig mere end to decimaler, f.eks. 0.75, så denne sættes til `decimal(3,2)`.
+**NB!** Man skal passe ved udregning af den endelige pris efter rabat pga. *round-to-even*-konceptet:
+```py
+>>> import decimal
+>>> price = decimal.Decimal("12.25") * decimal.Decimal("0.5")
+>>> round(price, 2)
+decimal.Decimal('6.12')
+>>> price = decimal.Decimal("12.75") * decimal.Decimal("0.5")
+>>> round(price, 2)
+decimal.Decimal('6.38')
+```
+Man ville ellers forvente, at 6.125 blev rundet op til 6.13, ligesom 6.375 bliver rundet til 6.38.
 
 #### [Orders](data_api/data/orders.csv)
 Hentet gennem: API
@@ -262,7 +286,7 @@ Eksempel på rådata: `'[{"order_id":1,"customer_id":259,"order_status":4,"order
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+orders = {
     "header": { 
         "order_id": int,
         "customer_id": int,
@@ -295,9 +319,17 @@ Eksempel på rådata: `'[{"order_id":1,"customer_id":259,"order_status":4,"order
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `order_id` | *int* | `\d{1,4}` | `int PRIMARY KEY AUTO_INCREMENT` |
+| `customer_id` | *int* | `\d{1,4}` | `int NOT NULL` |
+| `order_status` | *int* | `\d` | `tinyint NOT NULL` |
+| `order_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `` |
+| `required_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `` |
+| `shipped_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `date` |
+| `store` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
+| `staff_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
 
 ##### Kommentarer
+
 
 #### [Products](data_db/products.csv)
 Hentet gennem: MySQL-DB
@@ -307,7 +339,7 @@ Eksempel på rådata: `[(1, 'Trek 820 - 2016', 9, 6, 2016, 379.99),` ... `]`
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+products = {
     "header": { 
         "product_id": int,
         "product_name": str,
@@ -334,19 +366,24 @@ Eksempel på rådata: `[(1, 'Trek 820 - 2016', 9, 6, 2016, 379.99),` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `` | ** | `` | `` |
+| `` | ** | `` | `` |
+| `` | ** | `` | `` |
+| `` | ** | `` | `` |
+| `` | ** | `` | `` |
+| `` | ** | `` | `` |
 
 ##### Kommentarer
 
 #### [Staff](data_csv/staffs.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
-Eksempel på rådata: `[(1, 'Electra'),` ... `]`
+Eksempel på rådata: `['Fabiola,Jackson,fabiola.jackson@bikes.shop,(831) 555-5554,1,Santa Cruz Bikes,3700 Portola Drive,NULL',` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+staff = {
     "header": {},
     "data": [{}]
 }
@@ -356,10 +393,24 @@ Eksempel på rådata: `[(1, 'Electra'),` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `staff_id` | *int* | — | `int PRIMARY KEY AUTO_INCREMENT` |
+| `name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
+| `last_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
+| `email` | *str* | `[a-z]+\.[a-z]+@bikes\.shop` | `varchar(80) NOT NULL` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `char(14) NOT NULL` |
+| `active` | *int* | `\d` | `bit(1) NOT NULL` |
+| `store_id` | *int* | — | `int NOT NULL`
+| `store_name` | *str* | `[A-z ]+ Bikes` | — |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | — |
+| `manager_id` | *int* | `\d+` eller `NULL` | `int` |
 
 ##### Kommentarer
-Hvorfor har man her addressen på butikken, når den allerede findes i Stores?
+Hvorfor har man her addressen på butikken, når den allerede findes i tabellen `stores`? Den kolonne kan godt fjernes fra tabellen.
+Jeg refererer desuden til butikkens id istf. navn, se [hvorfor](#kommentarer-8)
+
+Jeg laver en kolonne `staff_id` som primary key. `manager_id` bruger allerede et nummer for at referere til en ansat. Chefen Fabiola Jackson har ingen leder, så værdien her er `NULL` (hvilket bliver til `None` i *dict*-strukturen?), mens Mireya, Jannette og Kali leder hver deres afdeling, og alle har Fabiola (1) som chef. Genna og Virgie i Santa Cruz har Mireya (2) som chef, Marceline og Venita i Baldwin har Jannette (5) som chef. Layla og Bernardine i Rowlett burde stå med Kali (8) som chef, men de står med Venita (7) som chef. Det giver ikke mening, at ansatte i Rowlett har en ansat i Baldwin som chef, mens lederen i Rowlett ikke har nogle ansatte under sig. Det er et eksempel på, hvorfor det er en god ide at få et id som primary key, så man ikke laver fejl som denne ved at tælle manuelt.
+
+`active` kunne være en `bit(1)` eller `boolean` (som er alias for `tinyint(1)`)
 
 #### [Stock](data_db/stocks.csv)
 Hentet gennem: MySQL-DB
@@ -369,15 +420,15 @@ Eksempel på rådata: `[('Santa Cruz Bikes', 1, 27), ` ... `]`
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
+stock = {
     "header": { 
-        "store_name": str,
+        "store_id": int,
         "product_id": int,
         "quantity": int
     },
     "data": [
         {
-            "store_name": "Santa Cruz Bikes",
+            "store_name": 1,
             "product_id": 1,
             "quantity": 27
         },
@@ -390,21 +441,48 @@ Eksempel på rådata: `[('Santa Cruz Bikes', 1, 27), ` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `store_id` | *int* | — | `int NOT NULL` |
+| `store_name` | *str* | `[A-z ]+` | — |
+| `product_id` | *int* | `\d{1,3}` | `int NOT NULL` |
+| `quantity` | *int* | `\d{1,2}` | `int NOT NULL` |
 
 ##### Kommentarer
+Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8).
 
 #### [Stores](data_csv/stores.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
-Eksempel på rådata: `[(),` ... `]`
+Eksempel på rådata: `['Santa Cruz Bikes,(831) 476-4321,santacruz@bikes.shop,3700 Portola Drive,Santa Cruz,CA,95060',` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
 
 ```py
-{
-    "header": {},
-    "data": [{}]
+stores = {
+    "header": {
+        "store_id": int,
+        "name": str,
+        "phone": str,
+        "email": str,
+        "street": str,
+        "city": str,
+        "state": str,
+        "zip_code": int,
+    },
+    "data": [
+        {
+            "store_id": 1,
+            "name": "Santa Cruz Bikes",
+            "phone": "(831) 476-4321",
+            "email": "santacruz@bikes.shop",
+            "street": "3700 Portola Drive",
+            "city": "Santa Cruz",
+            "state": "CA",
+            "zip_code": 95060,
+        },
+```
+...
+```py
+    ]
 }
 ```
 </details>
@@ -412,9 +490,17 @@ Eksempel på rådata: `[(),` ... `]`
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-|||||
+| `store_id` | *int* | — | `int PRIMARY KEY AUTO_INCREMENT` |
+| `name` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `char(14) NOT NULL` |
+| `email` | *str* | `[a-z]+@bikes\.shop` | `varchar(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `varchar(80) NOT NULL` |
+| `city` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
+| `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
+| `zip_code` | *int* | `\d{5}` | `mediumint NOT NULL` |
 
 ##### Kommentarer
+Jeg har valgt at introducere et heltal `store_id` som primary key, da det er besværligt at skulle skrive hele butiksnavnet, hver gang data fra tabellen skal bruges. Der er også risiko for at komme til at lave stavefejl, hvorimod et heltal på et enkelt ciffer er meget hurtigere at bruge og sværere at skrive forkert.
 
 ### Loading
 Da vi på kurset har arbejdet med MySQL, er det kun naturligt, at den samlede data lagres i sådan en databse.
