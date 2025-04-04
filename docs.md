@@ -109,7 +109,7 @@ brands = {
         { "brand_id": 1, "brand_name": "Electra" },
 ```
 ...
-```
+```py
     ]
 }
 ```
@@ -118,8 +118,8 @@ brands = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `brand_id` | *int* | `\d` | `int PRIMARY KEY AUTO_INCREMENT` |
-| `brand_name` | *str* | `[A-z ]+` | `varchar(40) NOT NULL` |
+| `brand_id` | *int* | `\d` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `brand_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 
 ##### Kommentarer
 
@@ -149,8 +149,8 @@ categories = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `category_id` | *int* | `\d` | `int PRIMARY KEY AUTO_INCREMENT` |
-| `category_name` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
+| `category_id` | *int* | `\d` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `category_name` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
 
 ##### Kommentarer
 
@@ -197,18 +197,18 @@ customers = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `customer_id` | *int* | `\d{1,4}` | `int PRIMARY KEY AUTO_INCREMENT` |
-| `first_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
-| `last_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
-| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` eller `NULL` | `char(14)` |
-| `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `varchar(80) NOT NULL` |
-| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `varchar(80) NOT NULL` |
-| `city` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
-| `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
-| `zip_code` | *int* | `\d{5}` | `mediumint NOT NULL` |
+| `customer_id` | *int* | `\d{1,4}` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `first_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
+| `last_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` eller `NULL` | `CHAR(14)` |
+| `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `VARCHAR(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(80) NOT NULL` |
+| `city` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
+| `state` | *str* | `[A-Z]{2}` | `CHAR(2) NOT NULL` |
+| `zip_code` | *int* | `\d{5}` | `MEDIUMINT(5) NOT NULL` |
 
 ##### Kommentarer
-Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `char` (sparer lidt tid og plads) og `mediumint` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
+Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `CHAR` (sparer lidt tid og plads ved de to første) og `MEDIUMINT` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
 Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
 
 I kolonnen `last_name` er der efternavne af gælisk afstamning, f.eks. O'Neill og McMahon, der gengives med ukorrekt brug af store bogstaver som *O'neill* og *Mcmahon*. Ligeledes kan dette findes i `city` for byen McAllen i Texas, der gengives som *Mcallen*.
@@ -253,15 +253,15 @@ order_items = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `order_id` | *int* | `\d{1,4}` | `int NOT NULL` |
-| `item_id` | *int* | `\d` | `int NOT NULL` |
-| `product_id` | *int* | `\d{1,3}` | `int NOT NULL` |
-| `quantity` | *int* | `\d` | `int NOT NULL` |
+| `order_id` | *int* | `\d{1,4}` | `INT NOT NULL` |
+| `item_id` | *int* | `\d` | `INT NOT NULL` |
+| `product_id` | *int* | `\d{1,3}` | `INT NOT NULL` |
+| `quantity` | *int* | `\d` | `INT NOT NULL` |
 | `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
 | `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2)` |
 
 ##### Kommentarer
-I kolonnen `quantity` findes kun etcifrede tal, men man kunne forestille sig, at man kunne sælge f.eks. 10 reflekser el.lign., hvis virksomheden også begynder at bruge databasen til ekstraudstyr. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `smallint` istf. `tinyint`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `int`.
+I kolonnen `quantity` findes kun etcifrede tal, men man kunne forestille sig, at man kunne sælge f.eks. 10 reflekser el.lign., hvis virksomheden også begynder at bruge databasen til ekstraudstyr. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `SMALLINT` istf. `TINYINT`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `INT`.
 
 Den højeste pris i dataene er 11999.99, der indeholder 7 cifre. Det er usandsynligt, at forretningen får en cykel med en pris på over 99999.99 dollars, så derfor er `M = 7` i `decimal(M,D)`. For alligevel at være på den sikre side, sætter jeg dog `M = 8`. Da dollaren deles i 100 underenheder (cent), har alle priserne kun 2 decimaler (.00 til .99), og derfor ender vi på `decimal(7,2)`. Når priserne i tabellen er heltal, angives ingen decimaltal. Ved konvertering til `decimal.Decimal` kan man bruge `.quantize(decimal.Decimal("1.00"))` til at sørge for, at heltallene også har præcis to decimaler.
 
@@ -319,17 +319,35 @@ orders = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `order_id` | *int* | `\d{1,4}` | `int PRIMARY KEY AUTO_INCREMENT` |
-| `customer_id` | *int* | `\d{1,4}` | `int NOT NULL` |
-| `order_status` | *int* | `\d` | `tinyint NOT NULL` |
-| `order_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `` |
-| `required_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `` |
-| `shipped_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `date` |
-| `store` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
-| `staff_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
+| `order_id` | *int* | `\d{1,4}` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `customer_id` | *int* | `\d{1,4}` | `INT NOT NULL` |
+| `order_status` | *int* | `[1-4]` | `TINYINT NOT NULL` |
+| `order_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `DATE NOT NULL` |
+| `required_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `DATE NOT NULL` |
+| `shipped_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` eller `NULL` | `DATE` |
+| `store_id` | *int* | — | `INT NOT NULL` |
+| `store` | *str* | `[A-z ]+` | — |
+| `staff_id` | *int* | — | `INT NOT NULL` |
+| `staff_name` | *str* | `[A-z]+` | — |
 
 ##### Kommentarer
+Jeg erstatter `store` og `staff_name` med hhv. `store_id` og `staff_id`, se hvorfor [her](#kommentarer-8) og [her](#kommentarer-6).
 
+`order_status` kan have en af fire værdier: 1, 2, 3 eller 4. Denne kunne altså laves som en `ENUM`, da hver værdi har en bestemt betydning. Jeg gætter på, at det er noget i stil med
+
+1. Ordre modtaget
+2. Ordre under behandling
+3. Ordre klargjort
+4. Ordre afsendt
+
+I så fald ville man skrive `ENUM('received', 'processing', 'ready', 'shipped')`. Det smarte ved en `ENUM` er, at de forskellige værdier både kan refereres til via navn eller indeks. F.eks. svarer `'received'` til værdien 1, `'processing'` til 2, osv.
+
+Men det er lidt svært at tyde ud fra dataene, udover nr. 4, da det er den eneste status, hvor `shipped_date` er udfyldt.
+De andre statusser er der ikke så meget unikt ved. `shipped_date` er den eneste af datoerne, der kan være `NULL` og differentiere.
+`order_date` altid vil blive oprettet sammen med selve ordren og blive udfyldt, og `required_date` er også altid udfylt, uanset om `order_status` er 1, 2, 3 eller 4.
+Statussen 3 kunne f.eks. også være en afbestilt ordre, da den findes rundt omkring i tabellen genne flere år blandt afsendte ordrer med status 4.
+Status 1 og 2 findes kun i bunden af datasættet i måneden april 2018, der ud fra de senest afsendte ordrer med status 4 i starten af april ser ud til at passe med ikke-afsendte order, der er modtaget eller under forberedelse i "nutiden". 
+Men der er også status 3 i bunden, der ser ud til at være "fremtidige" ordrer, og altså ikke afbestillinger. Måske er det rettere inaktive ordrer.
 
 #### [Products](data_db/products.csv)
 Hentet gennem: MySQL-DB
@@ -384,8 +402,30 @@ Eksempel på rådata: `['Fabiola,Jackson,fabiola.jackson@bikes.shop,(831) 555-55
 
 ```py
 staff = {
-    "header": {},
-    "data": [{}]
+    "header": {
+        "staff_id": int,
+        "first_name": str,
+        "last_name": str,
+        "email": str,
+        "phone": str,
+        "active": int,
+        "store_id": ,
+        "manager_id": 
+    },
+    "data": [
+        {
+            "staff_id": 1,
+            "first_name": "Fabiola",
+            "last_name": "Jackson",
+            "email": "fabiola.jackson@bikes.shop",
+            "phone": "(831) 555-5554,
+            "active": 1,
+            "store_id": 1,
+            "manager_id": None
+        },
+```
+```py
+    ]
 }
 ```
 </details>
@@ -393,24 +433,24 @@ staff = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `staff_id` | *int* | — | `int PRIMARY KEY AUTO_INCREMENT` |
-| `name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
-| `last_name` | *str* | `[A-z]+` | `varchar(40) NOT NULL` |
-| `email` | *str* | `[a-z]+\.[a-z]+@bikes\.shop` | `varchar(80) NOT NULL` |
-| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `char(14) NOT NULL` |
-| `active` | *int* | `\d` | `bit(1) NOT NULL` |
-| `store_id` | *int* | — | `int NOT NULL`
+| `staff_id` | *int* | — | `INT PRIMARY KEY AUTO_INCREMENT` |
+| ~~`name`~~ `first_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
+| `last_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
+| `email` | *str* | `[a-z]+\.[a-z]+@bikes\.shop` | `VARCHAR(80) NOT NULL` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `CHAR(14) NOT NULL` |
+| `active` | *int* | `\d` | `BOOLEAN NOT NULL` |
+| `store_id` | *int* | — | `INT NOT NULL` |
 | `store_name` | *str* | `[A-z ]+ Bikes` | — |
 | `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | — |
-| `manager_id` | *int* | `\d+` eller `NULL` | `int` |
+| `manager_id` | *int* | `\d+` eller `NULL` | `INT` |
 
 ##### Kommentarer
 Hvorfor har man her addressen på butikken, når den allerede findes i tabellen `stores`? Den kolonne kan godt fjernes fra tabellen.
-Jeg refererer desuden til butikkens id istf. navn, se [hvorfor](#kommentarer-8)
+Jeg refererer desuden til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Navnet på kolonnen `name` ændrer jeg samtidig til `first_name`.
 
 Jeg laver en kolonne `staff_id` som primary key. `manager_id` bruger allerede et nummer for at referere til en ansat. Chefen Fabiola Jackson har ingen leder, så værdien her er `NULL` (hvilket bliver til `None` i *dict*-strukturen?), mens Mireya, Jannette og Kali leder hver deres afdeling, og alle har Fabiola (1) som chef. Genna og Virgie i Santa Cruz har Mireya (2) som chef, Marceline og Venita i Baldwin har Jannette (5) som chef. Layla og Bernardine i Rowlett burde stå med Kali (8) som chef, men de står med Venita (7) som chef. Det giver ikke mening, at ansatte i Rowlett har en ansat i Baldwin som chef, mens lederen i Rowlett ikke har nogle ansatte under sig. Det er et eksempel på, hvorfor det er en god ide at få et id som primary key, så man ikke laver fejl som denne ved at tælle manuelt.
 
-`active` kunne være en `bit(1)` eller `boolean` (som er alias for `tinyint(1)`)
+`active` kan være en `BIT(1)` eller `BOOLEAN` (som er alias for `TINYINT(1)`). Jeg har valgt at bruge boolean, da det er en sand/falsk værdi, og da heltalsværdierne 0 og 1 så bevares, uden at man skal til at bøvle med `b'0'`, `b'1'`, `0b0`, `0b1` eller lignende.
 
 #### [Stock](data_db/stocks.csv)
 Hentet gennem: MySQL-DB
@@ -441,10 +481,10 @@ stock = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `store_id` | *int* | — | `int NOT NULL` |
+| `store_id` | *int* | — | `INT NOT NULL` |
 | `store_name` | *str* | `[A-z ]+` | — |
-| `product_id` | *int* | `\d{1,3}` | `int NOT NULL` |
-| `quantity` | *int* | `\d{1,2}` | `int NOT NULL` |
+| `product_id` | *int* | `\d{1,3}` | `INT NOT NULL` |
+| `quantity` | *int* | `\d{1,2}` | `INT NOT NULL` |
 
 ##### Kommentarer
 Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8).
@@ -490,17 +530,18 @@ stores = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `store_id` | *int* | — | `int PRIMARY KEY AUTO_INCREMENT` |
-| `name` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
-| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `char(14) NOT NULL` |
-| `email` | *str* | `[a-z]+@bikes\.shop` | `varchar(80) NOT NULL` |
-| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `varchar(80) NOT NULL` |
-| `city` | *str* | `[A-z ]+` | `varchar(80) NOT NULL` |
-| `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
-| `zip_code` | *int* | `\d{5}` | `mediumint NOT NULL` |
+| `store_id` | *int* | — | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `name` | *str* | `[A-z ]+ Bikes` | `VARCHAR(80) NOT NULL` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `CHAR(14) NOT NULL` |
+| `email` | *str* | `[a-z]+@bikes\.shop` | `VARCHAR(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(80) NOT NULL` |
+| `city` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
+| `state` | *str* | `[A-Z]{2}` | `CHAR(2) NOT NULL` |
+| `zip_code` | *int* | `\d{5}` | `MEDIUMINT(5) NOT NULL` |
 
 ##### Kommentarer
 Jeg har valgt at introducere et heltal `store_id` som primary key, da det er besværligt at skulle skrive hele butiksnavnet, hver gang data fra tabellen skal bruges. Der er også risiko for at komme til at lave stavefejl, hvorimod et heltal på et enkelt ciffer er meget hurtigere at bruge og sværere at skrive forkert.
+Derudover har butiksnavnet formatet [bynavn] + 'Bikes'. I USA er der alt efter kilden mellem 34 og 67 forskellige befolkede steder med toponymet Springfield. Hvis virksomheden en dag havde en afdeling i flere forskellige byer ved navn Springfield, ville `name` ikke kunne bruges som primary key, da de alle ville hedde 'Springfield Bikes', eller måske 'Springfield Bikes Oregon'. Det er sikrere at bruge `store_id`.
 
 ### Loading
 Da vi på kurset har arbejdet med MySQL, er det kun naturligt, at den samlede data lagres i sådan en databse.
