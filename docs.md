@@ -84,13 +84,22 @@ Det vil sige, at formatet er
 Jeg har valgt at bruge dette format, dels fordi det er utrolig let at gå fra JSON til dette format, dels fordi jeg i *uge_2*-opgaven outputtede rensede data som en *dict* og derfor allerede har noget kode, dels fordi *mysql-connector-python* i forvejen bruger en *dict* til at indsætte værdierne i parameteriserede queries, og jeg derfor også har noget kode fra *uge_4*-opgaven i forvejen.
 
 ### Transformation
-Her er det vigtigt at kigge på de forskellige datakilders struktur.
-Hvilke datafelter har de, og hvilke datatyper?
-Hvilke relationer er der i de forskellige datasæt? Primary keys og foreign keys? Har et datasæt alt i én tabel, mens andre har flere tabeller?
-Er der overlap mellem datafelterne i datasættene. Hvis ja, er der dubletter blandt de forskellige entries, eller er der måske entries med samme nøgle men forskelligt indhold? Hvis nej, hvilke datafelter skal så tages med fra de forskellige kilder?
+Der er mange vigtige ting at kigge på, når det angår transformation af den udtrukne data.
+Først er der de forskellige datakilders struktur. Hvilke datafelter har de, og hvilke datatyper?
+Hvilke relationer er der i de forskellige datasæt? Primary keys og foreign keys?
+Er der overlap mellem datafelterne i datasættene? Hvis ja, er der dubletter blandt de forskellige entries, eller er der måske entries med samme nøgle men forskelligt indhold? Hvis nej, hvilke datafelter skal så tages med fra de forskellige kilder?
 Og i den sammenhæng, hvilken struktur skal de endelige data have? Er det i orden, at nogle kolonner ikke har data for nogle rækker?
 
-Herunder følger analyser af strukturen og formatet af de forskellige datasæt og kommentarer til datarensning/-transformation.
+Herunder følger analyser af kommentarer til de forskellige datasæt.
+Først vises rådataformatet, samt eksempler på rådata og slutformatet.
+Herefter beskrives datasættets struktur i en tabel, der indeholder følgende kolonner:
+
+* *Kolonne*: Navnet på kolonnen. Hvis navnet ændres, vises det gamle navn overstreget ~~således~~.
+* *Type*: Den Python-type, som data fra kolonnen skal behandles som i koden.
+* *Format (regex)*: Det format rådata fra kolonnen har (i regex). Hvis dette felt er tomt, er kolonnen en, som jeg selv opretter, og som ikke findes i det oprindelige datasæt.
+* *SQL*: Den datatype, som jeg definerer kolonnen som i SQL-queriet til den konsoliderede, endelige database.
+
+Til sidst kommenterer jeg på relevante overvejelser vedr. datarensning og -transformation af de forskellige tabeller i datasættene og forklarer, hvorfor jeg evt. udelader kolonner eller opretter nye, når jeg samler alle dataene til sidst.
 
 #### [Brands](data_db/brands.csv)
 Hentet gennem: MySQL-DB
@@ -122,6 +131,7 @@ brands = {
 | `brand_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 
 ##### Kommentarer
+Der er ikke noget at kommentere på her, udover måske længden af `VARCHAR`. Det længste navn i tabellen over brands er på 12 bogstaver, så man kunne gøre `VARCHAR` endnu kortere end 40 tegn og spare lidt, men der skal på den anden side også være noget plads til et potentielt langt brandnavn.
 
 #### [Categories](data_db/categories.csv)
 Hentet gennem: MySQL-DB
@@ -150,13 +160,14 @@ categories = {
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `category_id` | *int* | `\d` | `INT PRIMARY KEY AUTO_INCREMENT` |
-| `category_name` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
+| `category_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 
 ##### Kommentarer
+Der er heller ikke rigtig noget at kommentere på her, som ikke er blevet sagt [ovenfor](#kommentarer). Her er det længste navn i `category_name` på 19 bogstaver, altså stadig under halvdelen af den samlede allokerede længde i `VARCHAR`.
 
 #### [Customers](data_api/data/customers.csv)
 Hentet gennem: API
-Rådataformat: JSON
+Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"customer_id":1,"first_name":"Debra","last_name":"Burks","phone":"NULL","email":"debra.burks@yahoo.com","street":"9273 Thorne Ave. ","city":"Orchard Park","state":"NY","zip_code":14127},` ... `]'`
 <details>
 <summary>Eksempel på slutformat:</summary>
@@ -202,14 +213,20 @@ customers = {
 | `last_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
 | `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` eller `NULL` | `CHAR(14)` |
 | `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `VARCHAR(80) NOT NULL` |
-| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(80) NOT NULL` |
-| `city` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(63) NOT NULL` |
+| `city` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 | `state` | *str* | `[A-Z]{2}` | `CHAR(2) NOT NULL` |
 | `zip_code` | *int* | `\d{5}` | `MEDIUMINT(5) NOT NULL` |
 
 ##### Kommentarer
 Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `CHAR` (sparer lidt tid og plads ved de to første) og `MEDIUMINT` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
 Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
+
+En email kan egentlig være meget længere end de 80 tegn, der allokeres her, men [langt størstedelen](https://atdata.com/blog/long-email-addresses/) er under 40 tegn. Men fordi telefonnummeret tilsyneladende ikke er en påkrævet værdi for kunden at udfylde (kun 177 ud af 1445 kunder har oplyst telefonnummer.) er det vigtigt at kunne få kontakt gennem email, så derfor giver jeg en ekstra god længde .
+
+Et af de længste vejnavne i USA er 'Jean Baptiste Pointe du Sable Lake Shore Drive' i Chicago, Illinois på 46 tegn inkl. mellemrum. Derfor er `VARCHAR(40)` ikke nok, og en længde på 63 bruges til `street`.
+
+Et af de længste bynavne i USA er '[Bonadelle Ranchos-Madera Ranchos](https://www.businessinsider.com/longest-town-names-us-list-2019-7?op=1#30-letters-fetters-hot-springs-agua-caliente-california-2)' i Californien på 33 tegn inkl. mellemrum. Derfor burde `VARCHAR(40)` være nok til `city`.
 
 I kolonnen `last_name` er der efternavne af gælisk afstamning, f.eks. O'Neill og McMahon, der gengives med ukorrekt brug af store bogstaver som *O'neill* og *Mcmahon*. Ligeledes kan dette findes i `city` for byen McAllen i Texas, der gengives som *Mcallen*.
 I kolonnen `email` er der 10 emailadresser, der indeholder en apostrof i lokaladressen, f.eks. *harold.o'connor@...*. Mens dette er et ASCII-tegn og teknisk set kan være en gyldig adresse ifølge [RFC 3696](https://datatracker.ietf.org/doc/html/rfc3696#section-3), så er det en ugyldig adresse hos Gmail og sandsynligvis også hos langt de fleste andre store email-hosts.
@@ -218,7 +235,7 @@ I kolonnen `street` ender alle entries på et mellemrum. Dette lader ikke til at
 
 #### [Order Items](data_api/data/order_items.csv)
 Hentet gennem: API
-Rådataformat: JSON
+Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,"list_price":599.99,"discount":0.2},` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
@@ -261,7 +278,12 @@ order_items = {
 | `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2)` |
 
 ##### Kommentarer
-I kolonnen `quantity` findes kun etcifrede tal, men man kunne forestille sig, at man kunne sælge f.eks. 10 reflekser el.lign., hvis virksomheden også begynder at bruge databasen til ekstraudstyr. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `SMALLINT` istf. `TINYINT`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `INT`.
+Kolonnen `item_id` opdeler hver ordre i de forskellige produkter, der købtes. Selvom værdien for alle ordrer i datasætten kun er etcifret, kunne man i teorien godt få en ordre med 10+ forskellige produkter, og derfor kan man ikke sætte en bestemt grænse på denne. Jeg bruger derfor `INT`.
+Man kunne også overveje, om der overhovedet er nogen grund til at bevare `item_id`. Det eneste, jeg lige kan komme på, er, at man måske kunne bruge det til at analysere noget med vareprioritering, da tallet afspejler rækkefølgen, hvori de forskellige produkter i en given ordre blev lagt i varekurven. Ellers ved
+
+I kolonnen `quantity` findes ligeledes kun etcifrede tal, og man kunne igen forestille sig, at man kunne sælge f.eks. 10+ reflekser el.lign., hvis virksomheden nu også begynder at bruge databasen til ekstraudstyr, og ikke kun cykler. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `SMALLINT` istf. `TINYINT`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `INT` ligesom ovenfor.
+
+Man kunne måske tro, at `list_price` var overflødig, fordi man altid kan hente den gennem `product_id`, men man må ikke glemme, at prisen her i ordrelisten er den specifikke pris på ordretidspunktet, og at prisen i produktlisten er dynamisk og kan ændres pga. prisjusteringer, inflation mm. Hvis man henter prisen gennem `product_id` kan det hurtigt gå galt med regnskabet. Derfor sletter jeg ikke kolonnen `list_price`, selvom prisen for hvert produkt i denne ordreliste er identisk med prisen i prislisten.
 
 Den højeste pris i dataene er 11999.99, der indeholder 7 cifre. Det er usandsynligt, at forretningen får en cykel med en pris på over 99999.99 dollars, så derfor er `M = 7` i `decimal(M,D)`. For alligevel at være på den sikre side, sætter jeg dog `M = 8`. Da dollaren deles i 100 underenheder (cent), har alle priserne kun 2 decimaler (.00 til .99), og derfor ender vi på `decimal(7,2)`. Når priserne i tabellen er heltal, angives ingen decimaltal. Ved konvertering til `decimal.Decimal` kan man bruge `.quantize(decimal.Decimal("1.00"))` til at sørge for, at heltallene også har præcis to decimaler.
 
@@ -280,7 +302,7 @@ Man ville ellers forvente, at 6.125 blev rundet op til 6.13, ligesom 6.375 blive
 
 #### [Orders](data_api/data/orders.csv)
 Hentet gennem: API
-Rådataformat: JSON
+Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"order_id":1,"customer_id":259,"order_status":4,"order_date":"01/01/2016","required_date":"03/01/2016","shipped_date":"03/01/2016","store":"Santa Cruz Bikes","staff_name":"Mireya"},` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
@@ -394,8 +416,8 @@ products = {
 ##### Kommentarer
 
 #### [Staff](data_csv/staffs.csv)
-Hentet gennem: MySQL-DB
-Rådataformat: *list[tuple]*
+Hentet gennem: CSV
+Rådataformat: *list[str]* (CSV)
 Eksempel på rådata: `['Fabiola,Jackson,fabiola.jackson@bikes.shop,(831) 555-5554,1,Santa Cruz Bikes,3700 Portola Drive,NULL',` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
@@ -490,8 +512,8 @@ stock = {
 Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8).
 
 #### [Stores](data_csv/stores.csv)
-Hentet gennem: MySQL-DB
-Rådataformat: *list[tuple]*
+Hentet gennem: CSV
+Rådataformat: *list[str]* (CSV)
 Eksempel på rådata: `['Santa Cruz Bikes,(831) 476-4321,santacruz@bikes.shop,3700 Portola Drive,Santa Cruz,CA,95060',` ... `]`
 <details>
 <summary>Eksempel på slutformat:</summary>
