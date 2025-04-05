@@ -37,34 +37,40 @@ Den tredje er en liste af *dict*s, hver tilsvarende en datarække. Nøglerne i d
 Det vil sige, at formatet er *dict[str, dict[str, type] | dict[str, str | list[str] | dict[str, str]] | list[dict[str, Any]]]*.
 
 <details>
-<summary>Eller på udvidet Backus-Naur-form:</summary>
+<summary>Eller på augmenteret Backus-Naur-form (<a href="https://www.w3.org/Notation.html">W3-variant</a>):</summary>
 
-```bnf
-<tabel-dict> ::= <tabelnavn> '=' '{' <header-dict> ',' <keys-dict> ',' <data-list> '}'
+```abnf
+tabel-dict ::= tabelnavn "=" "{" header-dict "," keys-dict "," data-list "}"
 
-<header-dict> ::= '"header"' ':' '{' <kolonne-kvpair>+ '}'
-<kolonne-kvpair> ::= <kolonnenavn> ':' <datatype> ','
+header-dict ::= "'header'" ":" "{" 1*kolonne-kvpair "}"
+kolonne-kvpair ::= kolonnenavn ":" kolonne-definition ","
+kolonne-definition ::= "'" type-part [SP "NOT NULL"] [SP "AUTO_INCREMENT"] [SP "UNIQUE"] "'"
+type-part ::= number-part | text-part | "DATE" | "BOOLEAN"
 
-<keys-dict> ::= '"keys"' ':' '{' <primary_key-kvpair> ',' <foreign_key-dict> '}'
-<primary_key-kvpair> ::= '"primary"' ':' <primary_key-value>
-<primary_key-value> ::= <kolonnenavn> | '[' <kolonnenavn-list>+ ']'
-<kolonnenavn-list> ::= <kolonnenavn> ','
-<foreign_key-dict> ::== '"foreign"' ':' '{' <foreign_key-kvpair>* '}'
-<foreign_key-kvpair> ::== <kolonnenavn> ':' <tabelnavn_kolonnenavn-value> ','
-<tabelnavn_kolonnenavn-value> ::== <tabelnavn> '(' <kolonnenavn> ')'
+number-part ::= integer-part | decimal-part
+integer-part ::= integer-type [SP sign-type]
+integer-type ::= "TINYINT" | "SMALLINT" | "MEDIUMINT"
+sign-type ::= "UNSIGNED" | "SIGNED"
+decimal-part ::= "DECIMAL" "(" 1*DIGIT ["," "2"] ")"
 
-<data-list> ::= '"data"' ':' '[' <række-dict>+ ']'
-<række-dict> ::= '{' <datafelt-kvpair>+ '}'
-<datafelt-kvpair> ::= <kolonnenavn> ':' <feltværdi> ','
+text-part ::= text-type "(" 1*DIGIT ")"
+text-type ::= "CHAR" | "VARCHAR"
 
-<tabelnavn> ::= <navn>
-<kolonnenavn> ::= <navn>
+keys-dict ::= "'keys'" ":" "{" primary_key-kvpair "," foreign_key-dict "}"
+primary_key-kvpair ::= "'primary'" ":" primary_key-value
+primary_key-value ::= kolonnenavn | "[" 1*(kolonnenavn ",") "]"
+foreign_key-dict ::== "'foreign'" ":" "{" *foreign_key-kvpair "}"
+foreign_key-kvpair ::== kolonnenavn ":" reference-tuple ","
+reference-tuple ::== "(" tabelnavn "," kolonnenavn ")"
 
-; Nedenstående værdier er alle Python-typer (<Any> specificeres dog yderligere til de Python-typer, der optræder i dette datasæt, selvom Any i teorien kunne være hvilken som helst Python-type)
-<navn> ::= <str>
-<datatype> ::= <type>
-<feltværdi> ::= <Any>
-<Any> ::= <str> | <int> | <decimal.Decimal> | <datetime.date>
+data-list ::= "'data'" ":" "[" 1*raekke-dict "]"
+raekke-dict ::= "{" 1*datafelt-kvpair "}" ","
+datafelt-kvpair ::= kolonnenavn ":" feltvaerdi ","
+
+; Nedenstående værdier omsluttet af <> er alle Python-typer
+tabelnavn ::= <str>
+kolonnenavn ::= <str>
+feltvaerdi ::= <str> | <int> | <decimal.Decimal> | <datetime.date>
 ```
 </details>
 <details>
@@ -73,9 +79,9 @@ Det vil sige, at formatet er *dict[str, dict[str, type] | dict[str, str | list[s
 ```py
 {
     "header": {
-        "kolonne 0-navn": <class K_0_Type>,
+        "kolonne 0-navn": "kolonne 0-sql-definition",
         ...,
-        "kolonne i-navn": <class K_i_Type>
+        "kolonne i-navn": "kolonne i-sql-definition"
     },
     "keys": {
         "primary": [    # eller "pk kolonne-navn"
@@ -136,8 +142,8 @@ Eksempel på rådata: `[(1, 'Electra'),` ... `]`
 ```py
 brands = {
     "header": { 
-        "brand_id": int,
-        "brand_name": str
+        "brand_id": "SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE",
+        "brand_name": "VARCHAR(40) NOT NULL"
     },
     "keys": {
         "primary": "brand_id",
@@ -274,7 +280,20 @@ customers = {
 
 ##### Kommentarer
 Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `CHAR` (sparer lidt tid og plads ved de to første) og `MEDIUMINT` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
-Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
+Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk, eller endda *#########*. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
+Der bliver dog ikke taget højde for phone extensions eller landekode, hvilket ville gøre telefonnummeret endnu længere. Altså skal man sørge for at normalisere og validere telefonnumre, før de indsættes i tabellen.
+
+Fornavn og efternavn sættes hver til 40 tegn i længde, hvilket er en del højere end de gennemsnitlige længder. Men der er altid outliers som det længste
+
+<details>
+<summary>fornavn</summary>
+Rhoshandiatellyneshiaunneveshenkescianneshaimondrischlyndasaccarnaerenquellenendrasamecashaunettethalemeicoleshiwhalhinive’onchellecaundenesheaalausondrilynnejeanetrimyranaekuesaundrilynnezekeriakenvaunetradevonneyavondalatarneskcaevontaepreonkeinesceellaviavelzadawnefriendsettajessicannelesciajoyvaelloydietteyvettesparklenesceaundrieaquenttaekatilyaevea’shauwneoraliaevaekizzieshiyjuanewandalecciannereneitheliapreciousnesceverroneccaloveliatyronevekacarrionnehenriettaescecleonpatrarutheliacharsalynnmeokcamonaeloiesalynnecsiannemerciadellesciaustillaparissalondonveshadenequamonecaalexetiozetiaquaniaenglaundneshiafrancethosharomeshaunnehawaineakowethauandavernellchishankcarlinaaddoneillesciachristondrafawndrealaotrelleoctavionnemiariasarahtashabnequckagailenaxeteshiataharadaponsadeloriakoentescacraigneckadellanierstellavonnemyiatangoneshiadianacorvettinagodtawndrashirlenescekilokoneyasharrontannamyantoniaaquinettesequioadaurilessiaquatandamerceddiamaebellecescajamesauwnneltomecapolotyoajohnyaetheodoradilcyana</details>
+og
+<details>
+<summary>efternavn.</summary>
+Wolfeschlegel­steinhausen­bergerdorff­welche­vor­altern­waren­gewissenhaft­schafers­wessen­schafe­waren­wohl­gepflege­und­sorgfaltigkeit­beschutzen­vor­angreifen­durch­ihr­raubgierig­feinde­welche­vor­altern­zwolfhundert­tausend­jahres­voran­die­erscheinen­von­der­erste­erdemensch­der­raumschiff­genacht­mit­tungstein­und­sieben­iridium­elektrisch­motors­gebrauch­licht­als­sein­ursprung­von­kraft­gestart­sein­lange­fahrt­hinzwischen­sternartig­raum­auf­der­suchen­nachbarschaft­der­stern­welche­gehabt­bewohnbar­planeten­kreise­drehen­sich­und­wohin­der­neue­rasse­von­verstandig­menschlichkeit­konnte­fortpflanzen­und­sich­erfreuen­an­lebenslanglich­freude­und­ruhe­mit­nicht­ein­furcht­vor­angreifen­vor­anderer­intelligent­geschopfs­von­hinzwischen­sternartig­raum
+</details>
+&nbsp;
 
 En email kan egentlig være meget længere end de 80 tegn, der allokeres her, men [langt størstedelen](https://atdata.com/blog/long-email-addresses/) er under 40 tegn. Men fordi telefonnummeret tilsyneladende ikke er en påkrævet værdi for kunden at udfylde (kun 177 ud af 1445 kunder har oplyst telefonnummer), er det vigtigt at kunne få kontakt gennem email, så derfor giver jeg en ekstra god længde.
 Bl.a derfor er `email` også unik, mens `phone` ikke er. Af andre årsager kan nævnes, at det er normalt for telefonnumre at blive overtaget af ikke-relaterede folk i fremtiden, da nummeret ofte varetages af et bestemt teleselskab og kan mistes ved skift til et andet selskab, mens det ikke er normalt, at emailadresser overtages. Og også at flere personer i en husstand kan dele samme telefonnummer, hvis det er fastnet. Man kan dog også dele emailadresse i en husholdning, men så ville man nok også dele bruger hos virksomheden.
@@ -298,12 +317,12 @@ Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,
 ```py
 order_items = {
     "header": { 
-        "order_id": int,
-        "item_id": int,
-        "product_id": int,
-        "quantity": int,
-        "list_price": decimal.Decimal,
-        "discount": decimal.Decimal
+        "order_id": "MEDIUMINT UNSIGNED NOT NULL",
+        "item_id": "TINYINT UNSIGNED NOT NULL",
+        "product_id": "MEDIUMINT UNSIGNED NOT NULL",
+        "quantity": "SMALLINT UNSIGNED NOT NULL",
+        "list_price": "DECIMAL(8,2)",
+        "discount": "DECIMAL(3,2)"
     },
     "keys": {
         "primary": [
@@ -311,8 +330,8 @@ order_items = {
             "item_id"
         ],
         "foreign": {
-            "order_id": "orders(order_id)",
-            "product_id": "products(product_id)"
+            "order_id": ("orders", "order_id"),
+            "product_id": ("products", "product_id")
         }
     },
     "data": [
@@ -340,7 +359,7 @@ order_items = {
 | `product_id` | *int* | `\d{1,3}` | `MEDIUMINT UNSIGNED NOT NULL` |
 | `quantity` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL` |
 | `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
-| `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2)` |
+| `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2) NOT NULL DEFAULT (0.00)` |
 
 ##### Keys
 `CONSTRAINT PK_order_item PRIMARY KEY (order_id,item_id)`
@@ -359,7 +378,7 @@ Man kunne måske tro, at `list_price` var overflødig, fordi man altid kan hente
 
 Den højeste pris i dataene er 11999.99, der indeholder 7 cifre. Det er usandsynligt, at forretningen får en cykel med en pris på over 99999.99 dollars, så derfor er `M = 7` i `decimal(M,D)`. For alligevel at være på den sikre side, sætter jeg dog `M = 8`. Da dollaren deles i 100 underenheder (cent), har alle priserne kun 2 decimaler (.00 til .99), og derfor ender vi på `decimal(7,2)`. Når priserne i tabellen er heltal, angives ingen decimaltal. Ved konvertering til `decimal.Decimal` kan man bruge `.quantize(decimal.Decimal("1.00"))` til at sørge for, at heltallene også har præcis to decimaler.
 
-Rabatten i tabellen er altid en procent i decimalform, og der er aldrig mere end to decimaler, f.eks. 0.75, så denne sættes til `decimal(3,2)`.
+Rabatten i tabellen er altid en procent i decimalform, og der er aldrig mere end to decimaler, f.eks. 0.75, så denne sættes til `decimal(3,2)`. Standardrabatten er selvfølgelig på 0% (0.00), så hvis ingen rabat angives, indsættes denne værdi automatisk ved brug af `DEFAULT`.
 **NB!** Man skal passe ved udregning af den endelige pris efter rabat pga. *round-to-even*-konceptet:
 ```py
 >>> import decimal
