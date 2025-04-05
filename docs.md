@@ -30,28 +30,41 @@ Det er en fordel, hvis man allerede her i extraction-fasen kan få læst dataene
 * **CSV**: Til at hente data fra CSV-filerne tager jeg inspiration fra noget af koden, som jeg skrev til [*uge_2*](https://github.com/symegac/uge_2/blob/main/opgave_3/src/fejlhåndtering.py) og [*uge_4*](https://github.com/symegac/uge_4/blob/main/src/database.py), dog i revideret form. Jeg læser dataene og omdanner dem til en Python-*dict*.
 * **DB**: Til at hente data fra MySQL-databasen, bruger jeg igen min kode fra [*uge_4*](https://github.com/symegac/uge_4/blob/main/src/database.py) i revideret udgave til at forbinde til databasen og læse dataene og omdanne dem til en Python-*dict*.
 
-Til sidst bør hver tabel have form som en *dict* indeholdende to underinddelinger.
+Til sidst bør hver tabel have form som en *dict* indeholdende tre underinddelinger.
 Den første af disse er headeren, der er endnu en *dict*, hvori nøglerne består af navnet på de forskellige kolonner, mens værdierne udgøres af datatypen for hver kolonne.
-Den anden er en liste af *dict*s, hver tilsvarende en datarække. Nøglerne i denne *dict* er igen navnet på kolonnen, mens værdierne er værdien i samme kolonnes datafelt i den givne række.
-Det vil sige, at formatet er
-> *dict[dict[str], list[dict[str]]]*
+Den anden er en *dict* med tabellens relationelle keys. Primary key er enten et kolonnenavn eller en liste af kolonnenavne, hvis flere kolonner udgør primary key. Foreign keys er en *dict*, der kan være tom, hvis der ikke findes nogen foreign keys, eller være en række nøgle-værdi-par, hvor nøglen er kolonnenavnet i nuværende tabel, og værdien indeholder tabel- og kolonnenavn for den anden tabel.
+Den tredje er en liste af *dict*s, hver tilsvarende en datarække. Nøglerne i denne *dict* er igen navnet på kolonnen, mens værdierne er værdien i samme kolonnes datafelt i den givne række.
+Det vil sige, at formatet er *dict[str, dict[str, type] | dict[str, str | list[str] | dict[str, str]] | list[dict[str, Any]]]*.
 
 <details>
-<summary>På udvidet Backus-Naur-form:</summary>
+<summary>Eller på udvidet Backus-Naur-form:</summary>
 
 ```bnf
-<tabel-dict> ::= '{' <header-dict> ',' <data-list> '}'
+<tabel-dict> ::= <tabelnavn> '=' '{' <header-dict> ',' <keys-dict> ',' <data-list> '}'
 
-<header-dict> ::= '"header": {' <kolonne-kvpair>+ '}'
-<kolonne-kvpair> ::= <kolonnenavn-key> ':' <datatype-value> ','
+<header-dict> ::= '"header"' ':' '{' <kolonne-kvpair>+ '}'
+<kolonne-kvpair> ::= <kolonnenavn> ':' <datatype> ','
 
-<data-list> ::= '"data": [' <række-dict>+ ']'
+<keys-dict> ::= '"keys"' ':' '{' <primary_key-kvpair> ',' <foreign_key-dict> '}'
+<primary_key-kvpair> ::= '"primary"' ':' <primary_key-value>
+<primary_key-value> ::= <kolonnenavn> | '[' <kolonnenavn-list>+ ']'
+<kolonnenavn-list> ::= <kolonnenavn> ','
+<foreign_key-dict> ::== '"foreign"' ':' '{' <foreign_key-kvpair>* '}'
+<foreign_key-kvpair> ::== <kolonnenavn> ':' <tabelnavn_kolonnenavn-value> ','
+<tabelnavn_kolonnenavn-value> ::== <tabelnavn> '(' <kolonnenavn> ')'
+
+<data-list> ::= '"data"' ':' '[' <række-dict>+ ']'
 <række-dict> ::= '{' <datafelt-kvpair>+ '}'
-<datafelt-kvpair> ::= <kolonnenavn-key> ':' <feltværdi-value> ','
+<datafelt-kvpair> ::= <kolonnenavn> ':' <feltværdi> ','
 
-<kolonnenavn-key> ::= <str (Python)>
-<datatype-value> ::= <type (Python)>
-<feltværdi-value> ::= <Any (Python)>
+<tabelnavn> ::= <navn>
+<kolonnenavn> ::= <navn>
+
+; Nedenstående værdier er alle Python-typer (<Any> specificeres dog yderligere til de Python-typer, der optræder i dette datasæt, selvom Any i teorien kunne være hvilken som helst Python-type)
+<navn> ::= <str>
+<datatype> ::= <type>
+<feltværdi> ::= <Any>
+<Any> ::= <str> | <int> | <decimal.Decimal> | <datetime.date>
 ```
 </details>
 <details>
@@ -60,21 +73,33 @@ Det vil sige, at formatet er
 ```py
 {
     "header": {
-        "kolonne 0-navn": <type K_0_Type>,
+        "kolonne 0-navn": <class K_0_Type>,
         ...,
-        "kolonne i-navn": <type K_i_Type>
+        "kolonne i-navn": <class K_i_Type>
     },
+    "keys": {
+        "primary": [    # eller "pk kolonne-navn"
+            "pk kolonne 1/i-navn",
+            ...,
+            "pk kolonne i/i-navn"
+        ],
+        "foreign": {    # eller {}
+            "fk kolonne 1-navn": "tabel x-navn(kolonne y-navn)",
+            ...,
+            "fk kolonne i-navn": "tabel m-navn(kolonne n-navn)"
+        }
+    }
     "data": [
         {
-            "kolonne 0-navn": feltværdi-r_0-k_0,
+            "kolonne 0-navn": r_0-k_0-værdi,
             ...,
-            "kolonne i-navn": feltværdi-r_0-k_i
+            "kolonne i-navn": r_0-k_i-værdi
         },
         ...,
         {
-            "kolonne 0-navn": feltværdi-r_i-k_0,
+            "kolonne 0-navn": r_i-k_0-værdi,
             ...,
-            "kolonne i-navn": feltværdi-r_i-k_i
+            "kolonne i-navn": r_i-k_i-værdi
         }
     ]
 }
@@ -114,8 +139,15 @@ brands = {
         "brand_id": int,
         "brand_name": str
     },
+    "keys": {
+        "primary": "brand_id",
+        "foreign": {}
+    },
     "data": [
-        { "brand_id": 1, "brand_name": "Electra" },
+        {
+            "brand_id": 1,
+            "brand_name": "Electra"
+        },
 ```
 ...
 ```py
@@ -127,11 +159,16 @@ brands = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `brand_id` | *int* | `\d` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `brand_id` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
 | `brand_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 
+##### Keys
+`PRIMARY KEY (brand_id)`
+
 ##### Kommentarer
-Der er ikke noget at kommentere på her, udover måske længden af `VARCHAR`. Det længste navn i tabellen over brands er på 12 bogstaver, så man kunne gøre `VARCHAR` endnu kortere end 40 tegn og spare lidt, men der skal på den anden side også være noget plads til et potentielt langt brandnavn.
+Til `brand_id` bruger jeg `SMALLINT`, da det er usandsynligt, at virksomheden nogensinde kommer til at forhandle mere end 65535 ($2^{16}$) forskellige brands.
+
+Det længste navn i tabellen over brands er på 12 bogstaver, så man kunne gøre `VARCHAR` endnu kortere end 40 tegn og spare lidt, men der skal på den anden side også være noget plads til et potentielt langt brandnavn.
 
 #### [Categories](data_db/categories.csv)
 Hentet gennem: MySQL-DB
@@ -146,8 +183,15 @@ categories = {
         "category_id": int,
         "category_name": str
     },
+    "keys": {
+        "primary": "category_id",
+        "foreign": {}
+    },
     "data": [
-        { "category_id": 1, "category_name": "Children Bicycles" },
+        {
+            "category_id": 1,
+            "category_name": "Children Bicycles"
+        },
 ```
 ...
 ```py
@@ -159,11 +203,14 @@ categories = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `category_id` | *int* | `\d` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `category_id` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
 | `category_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 
+##### Keys
+`PRIMARY KEY (category_id)`
+
 ##### Kommentarer
-Der er heller ikke rigtig noget at kommentere på her, som ikke er blevet sagt [ovenfor](#kommentarer). Her er det længste navn i `category_name` på 19 bogstaver, altså stadig under halvdelen af den samlede allokerede længde i `VARCHAR`.
+Se [ovenfor](#kommentarer) for længden af `category_id` og `category_name`. Her er det længste navn i `category_name` på 19 bogstaver, altså stadig under halvdelen af den samlede allokerede længde i `VARCHAR`.
 
 #### [Customers](data_api/data/customers.csv)
 Hentet gennem: API
@@ -184,6 +231,10 @@ customers = {
         "city": str,
         "state": str,
         "zip_code": int
+    },
+    "keys": {
+        "primary": "customer_id",
+        "foreign": {}
     },
     "data": [
         {
@@ -208,23 +259,27 @@ customers = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `customer_id` | *int* | `\d{1,4}` | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `customer_id` | *int* | `\d{1,4}` | `MEDIUMINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
 | `first_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
 | `last_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
 | `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` eller `NULL` | `CHAR(14)` |
-| `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `VARCHAR(80) NOT NULL` |
+| `email` | *str* | `[a-z]+\.[a-z]+@[a-z]+\.com` | `VARCHAR(80) NOT NULL UNIQUE` |
 | `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(63) NOT NULL` |
 | `city` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 | `state` | *str* | `[A-Z]{2}` | `CHAR(2) NOT NULL` |
-| `zip_code` | *int* | `\d{5}` | `MEDIUMINT(5) NOT NULL` |
+| `zip_code` | *int* | `\d{5}` | `MEDIUMINT UNSIGNED NOT NULL` |
+
+##### Keys
+`PRIMARY KEY (customer_id)`
 
 ##### Kommentarer
 Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `CHAR` (sparer lidt tid og plads ved de to første) og `MEDIUMINT` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
 Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
 
-En email kan egentlig være meget længere end de 80 tegn, der allokeres her, men [langt størstedelen](https://atdata.com/blog/long-email-addresses/) er under 40 tegn. Men fordi telefonnummeret tilsyneladende ikke er en påkrævet værdi for kunden at udfylde (kun 177 ud af 1445 kunder har oplyst telefonnummer.) er det vigtigt at kunne få kontakt gennem email, så derfor giver jeg en ekstra god længde .
+En email kan egentlig være meget længere end de 80 tegn, der allokeres her, men [langt størstedelen](https://atdata.com/blog/long-email-addresses/) er under 40 tegn. Men fordi telefonnummeret tilsyneladende ikke er en påkrævet værdi for kunden at udfylde (kun 177 ud af 1445 kunder har oplyst telefonnummer), er det vigtigt at kunne få kontakt gennem email, så derfor giver jeg en ekstra god længde.
+Bl.a derfor er `email` også unik, mens `phone` ikke er. Af andre årsager kan nævnes, at det er normalt for telefonnumre at blive overtaget af ikke-relaterede folk i fremtiden, da nummeret ofte varetages af et bestemt teleselskab og kan mistes ved skift til et andet selskab, mens det ikke er normalt, at emailadresser overtages. Og også at flere personer i en husstand kan dele samme telefonnummer, hvis det er fastnet. Man kan dog også dele emailadresse i en husholdning, men så ville man nok også dele bruger hos virksomheden.
 
-Et af de længste vejnavne i USA er 'Jean Baptiste Pointe du Sable Lake Shore Drive' i Chicago, Illinois på 46 tegn inkl. mellemrum. Derfor er `VARCHAR(40)` ikke nok, og en længde på 63 bruges til `street`.
+Et af de længste vejnavne i USA er 'Jean Baptiste Pointe du Sable Lake Shore Drive' i Chicago, Illinois på 46 tegn inkl. mellemrum. Derfor er `VARCHAR(40)` ikke nok, og en længde på 63 ($2^6-1$) bruges til `street`.
 
 Et af de længste bynavne i USA er '[Bonadelle Ranchos-Madera Ranchos](https://www.businessinsider.com/longest-town-names-us-list-2019-7?op=1#30-letters-fetters-hot-springs-agua-caliente-california-2)' i Californien på 33 tegn inkl. mellemrum. Derfor burde `VARCHAR(40)` være nok til `city`.
 
@@ -250,6 +305,16 @@ order_items = {
         "list_price": decimal.Decimal,
         "discount": decimal.Decimal
     },
+    "keys": {
+        "primary": [
+            "order_id",
+            "item_id"
+        ],
+        "foreign": {
+            "order_id": "orders(order_id)",
+            "product_id": "products(product_id)"
+        }
+    },
     "data": [
         {
             "order_id": 1,
@@ -270,18 +335,25 @@ order_items = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `order_id` | *int* | `\d{1,4}` | `INT NOT NULL` |
-| `item_id` | *int* | `\d` | `INT NOT NULL` |
-| `product_id` | *int* | `\d{1,3}` | `INT NOT NULL` |
-| `quantity` | *int* | `\d` | `INT NOT NULL` |
+| `order_id` | *int* | `\d{1,4}` | `MEDIUMINT UNSIGNED NOT NULL` |
+| `item_id` | *int* | `\d` | `TINYINT UNSIGNED NOT NULL` |
+| `product_id` | *int* | `\d{1,3}` | `MEDIUMINT UNSIGNED NOT NULL` |
+| `quantity` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL` |
 | `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
 | `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2)` |
+
+##### Keys
+`CONSTRAINT PK_order_item PRIMARY KEY (order_id,item_id)`
+
+`FOREIGN KEY (order_id) REFERENCES orders(order_id)`
+
+`FOREIGN KEY (product_id) REFERENCES products(product_id)`
 
 ##### Kommentarer
 Kolonnen `item_id` opdeler hver ordre i de forskellige produkter, der købtes. Selvom værdien for alle ordrer i datasætten kun er etcifret, kunne man i teorien godt få en ordre med 10+ forskellige produkter, og derfor kan man ikke sætte en bestemt grænse på denne. Jeg bruger derfor `INT`.
 Man kunne også overveje, om der overhovedet er nogen grund til at bevare `item_id`. Det eneste, jeg lige kan komme på, er, at man måske kunne bruge det til at analysere noget med vareprioritering, da tallet afspejler rækkefølgen, hvori de forskellige produkter i en given ordre blev lagt i varekurven. Ellers ved
 
-I kolonnen `quantity` findes ligeledes kun etcifrede tal, og man kunne igen forestille sig, at man kunne sælge f.eks. 10+ reflekser el.lign., hvis virksomheden nu også begynder at bruge databasen til ekstraudstyr, og ikke kun cykler. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `SMALLINT` istf. `TINYINT`. Dog kan man aldrig være sikker på, hvor stort et tal bliver, medmindre det er et fastsat format som postnummer, så jeg bruger bare `INT` ligesom ovenfor.
+I kolonnen `quantity` findes ligeledes kun etcifrede tal, og man kunne igen forestille sig, at man kunne sælge f.eks. 10+ reflekser el.lign., hvis virksomheden nu også begynder at bruge databasen til ekstraudstyr, og ikke kun cykler. Men kommer de mon til at sælge over 255 af samme vare? Måske, så for at være på den sikre side, kunne man bruge `SMALLINT` istf. `TINYINT`.
 
 Man kunne måske tro, at `list_price` var overflødig, fordi man altid kan hente den gennem `product_id`, men man må ikke glemme, at prisen her i ordrelisten er den specifikke pris på ordretidspunktet, og at prisen i produktlisten er dynamisk og kan ændres pga. prisjusteringer, inflation mm. Hvis man henter prisen gennem `product_id` kan det hurtigt gå galt med regnskabet. Derfor sletter jeg ikke kolonnen `list_price`, selvom prisen for hvert produkt i denne ordreliste er identisk med prisen i prislisten.
 
@@ -319,6 +391,14 @@ orders = {
         "store": str
         "staff_name": str
     },
+    "keys": {
+        "primary": "order_id",
+        "foreign": {
+            "customer_id": "customers(customer_id)",
+            "store_id": "stores(store_id)",
+            "staff_id": "staff(staff_id)"
+        }
+    },
     "data": [
         {
             "order_id": 1,
@@ -341,19 +421,29 @@ orders = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `order_id` | *int* | `\d{1,4}` | `INT PRIMARY KEY AUTO_INCREMENT` |
-| `customer_id` | *int* | `\d{1,4}` | `INT NOT NULL` |
-| `order_status` | *int* | `[1-4]` | `TINYINT NOT NULL` |
+| `order_id` | *int* | `\d{1,4}` | `MEDIUMINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
+| `customer_id` | *int* | `\d{1,4}` | `MEDIUMINT UNSIGNED NOT NULL` |
+| `order_status` | *int* | `[1-4]` | `TINYINT UNSIGNED NOT NULL` |
 | `order_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `DATE NOT NULL` |
 | `required_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` | `DATE NOT NULL` |
 | `shipped_date` | *datetime.date* | `\d{2}/\d{2}/\d{4}` eller `NULL` | `DATE` |
-| `store_id` | *int* | — | `INT NOT NULL` |
+| `store_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL` |
 | `store` | *str* | `[A-z ]+` | — |
-| `staff_id` | *int* | — | `INT NOT NULL` |
+| `staff_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL` |
 | `staff_name` | *str* | `[A-z]+` | — |
+
+##### Keys
+`PRIMARY KEY (order_id)`
+
+`FOREIGN KEY (customer_id) REFERENCES customers(customer_id)`
+
+`FOREIGN KEY (store_id) REFERENCES stores(store_id)`
+
+`FOREIGN KEY (staff_id) REFERENCES staff(staff_id)`
 
 ##### Kommentarer
 Jeg erstatter `store` og `staff_name` med hhv. `store_id` og `staff_id`, se hvorfor [her](#kommentarer-8) og [her](#kommentarer-6).
+Man kunne overveje helt at fjerne `store`/`store_id`, fordi denne værdi kan findes gennem `staff_id`. Men en ansat kan jo også skifte arbejdsplads internt i virksomheden, og hvis man skal lave statistik over salg fra bestemte branches, duer det ikke, at et salg pludselig tæller for en anden branch, bare fordi medarbejderen er flyttet derover. Hvis en succesfuld sælger f.eks. bliver forfremmet til manager af en ny branch, skal vedkommendes salgsstatistik jo ikke tælle med for en nyåbnet butik, der ikke har solgt noget endnu. Så kommer ordredatoerne også til at ligge før denne branchs åbningsdato.
 
 `order_status` kan have en af fire værdier: 1, 2, 3 eller 4. Denne kunne altså laves som en `ENUM`, da hver værdi har en bestemt betydning. Jeg gætter på, at det er noget i stil med
 
@@ -388,6 +478,13 @@ products = {
         "model_year": int,
         "list_price": decimal.Decimal
     },
+    "keys": {
+        "primary": "product_id",
+        "foreign": {
+            "brand_id": "brands(brand_id)",
+            "category_id": "categories(category_id)"
+        }
+    },
     "data": [
         {
             "product_id": 1,
@@ -406,14 +503,22 @@ products = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `` | ** | `` | `` |
-| `` | ** | `` | `` |
-| `` | ** | `` | `` |
-| `` | ** | `` | `` |
-| `` | ** | `` | `` |
-| `` | ** | `` | `` |
+| `product_id` | *int* | `\d{1,3}` | `MEDIUMINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
+| `product_name` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL UNIQUE` |
+| `brand_id` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL` |
+| `category_id` | *int* | `\d` | `SMALLINT UNSIGNED NOT NULL` |
+| `model_year` | *int* | `\d{4}` | `SMALLINT UNSIGNED NOT NULL` |
+| `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `DECIMAL(8,2) NOT NULL` |
+
+##### Keys
+`PRIMARY KEY (product_id)`
+
+`FOREIGN KEY (brand_id) REFERENCES brands(brand_id)`
+
+`FOREIGN KEY (category_id) REFERENCES categories(category_id)`
 
 ##### Kommentarer
+Se [her](#kommentarer-3) for længden af `list_price`.
 
 #### [Staff](data_csv/staffs.csv)
 Hentet gennem: CSV
@@ -431,8 +536,15 @@ staff = {
         "email": str,
         "phone": str,
         "active": int,
-        "store_id": ,
-        "manager_id": 
+        "store_id": int,
+        "manager_id": int
+    },
+    "keys": {
+        "primary": "staff_id",
+        "foreign": {
+            "store_id": "stores(store_id)",
+            "manager_id": "staff(staff_id)"
+        }
     },
     "data": [
         {
@@ -455,24 +567,35 @@ staff = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `staff_id` | *int* | — | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `staff_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
 | ~~`name`~~ `first_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
 | `last_name` | *str* | `[A-z]+` | `VARCHAR(40) NOT NULL` |
-| `email` | *str* | `[a-z]+\.[a-z]+@bikes\.shop` | `VARCHAR(80) NOT NULL` |
-| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `CHAR(14) NOT NULL` |
+| `email` | *str* | `[a-z]+\.[a-z]+@bikes\.shop` | `VARCHAR(80) NOT NULL UNIQUE` |
+| `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `CHAR(14) NOT NULL UNIQUE` |
 | `active` | *int* | `\d` | `BOOLEAN NOT NULL` |
-| `store_id` | *int* | — | `INT NOT NULL` |
+| `store_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL` |
 | `store_name` | *str* | `[A-z ]+ Bikes` | — |
 | `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | — |
-| `manager_id` | *int* | `\d+` eller `NULL` | `INT` |
+| `manager_id` | *int* | `\d+` eller `NULL` | `SMALLINT UNSIGNED` |
+
+##### Keys
+`PRIMARY KEY (staff_id)`
+
+`FOREIGN KEY (store_id) REFERENCES stores(store_id)`
+
+`FOREIGN KEY (manager_id) REFERENCES staff(staff_id)`
+
 
 ##### Kommentarer
-Hvorfor har man her addressen på butikken, når den allerede findes i tabellen `stores`? Den kolonne kan godt fjernes fra tabellen.
-Jeg refererer desuden til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Navnet på kolonnen `name` ændrer jeg samtidig til `first_name`.
+Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Navnet på kolonnen `name` ændrer jeg samtidig til `first_name`.
 
 Jeg laver en kolonne `staff_id` som primary key. `manager_id` bruger allerede et nummer for at referere til en ansat. Chefen Fabiola Jackson har ingen leder, så værdien her er `NULL` (hvilket bliver til `None` i *dict*-strukturen?), mens Mireya, Jannette og Kali leder hver deres afdeling, og alle har Fabiola (1) som chef. Genna og Virgie i Santa Cruz har Mireya (2) som chef, Marceline og Venita i Baldwin har Jannette (5) som chef. Layla og Bernardine i Rowlett burde stå med Kali (8) som chef, men de står med Venita (7) som chef. Det giver ikke mening, at ansatte i Rowlett har en ansat i Baldwin som chef, mens lederen i Rowlett ikke har nogle ansatte under sig. Det er et eksempel på, hvorfor det er en god ide at få et id som primary key, så man ikke laver fejl som denne ved at tælle manuelt.
 
+Jeg gør `email` og `phone` til kolonner, der skal indeholde unikke værdier, da hver emailadresse er på virksomhedens domæne og tildeles til hver medarbejder, og da telefonnumrene er konsekutive og derfor også ser ud til at være blevet tildelt af virksomheden.
+
 `active` kan være en `BIT(1)` eller `BOOLEAN` (som er alias for `TINYINT(1)`). Jeg har valgt at bruge boolean, da det er en sand/falsk værdi, og da heltalsværdierne 0 og 1 så bevares, uden at man skal til at bøvle med `b'0'`, `b'1'`, `0b0`, `0b1` eller lignende.
+
+`street` er ikke medarbejderens adresse, men butikkens, så denne kolonne fjernes sammen med `store_name`, da de begge kan udledes af `store_id`.
 
 #### [Stock](data_db/stocks.csv)
 Hentet gennem: MySQL-DB
@@ -488,9 +611,18 @@ stock = {
         "product_id": int,
         "quantity": int
     },
+    "keys": {
+        "primary": [
+            "store_id",
+            "product_id"
+        ]
+        "foreign": {
+            "product_id": "products(product_id)"
+        }
+    },
     "data": [
         {
-            "store_name": 1,
+            "store_id": 1,
             "product_id": 1,
             "quantity": 27
         },
@@ -503,13 +635,18 @@ stock = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `store_id` | *int* | — | `INT NOT NULL` |
+| `store_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL` |
 | `store_name` | *str* | `[A-z ]+` | — |
-| `product_id` | *int* | `\d{1,3}` | `INT NOT NULL` |
-| `quantity` | *int* | `\d{1,2}` | `INT NOT NULL` |
+| `product_id` | *int* | `\d{1,3}` | `MEDIUMINT UNSIGNED NOT NULL` |
+| `quantity` | *int* | `\d{1,2}` | `MEDIUMINT UNSIGNED NOT NULL` |
+
+##### Keys
+`CONSTRAINT PK_store_id_product_id PRIMARY KEY (store_id,product_id)`
+
+`FOREIGN KEY (product_id) REFERENCES products(product_id)`
 
 ##### Kommentarer
-Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8).
+Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Selvom virksomheden har meget lang udsigt til at åbne mere end 255 butikker, så bruger jeg `SMALLINT` hertil for en sikkerheds skyld.
 
 #### [Stores](data_csv/stores.csv)
 Hentet gennem: CSV
@@ -530,6 +667,10 @@ stores = {
         "state": str,
         "zip_code": int,
     },
+    "keys": {
+        "primary": "store_id"
+        "foreign": {}
+    }
     "data": [
         {
             "store_id": 1,
@@ -552,18 +693,23 @@ stores = {
 ##### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
-| `store_id` | *int* | — | `INT PRIMARY KEY AUTO_INCREMENT` |
+| `store_id` | *int* | — | `SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE` |
 | `name` | *str* | `[A-z ]+ Bikes` | `VARCHAR(80) NOT NULL` |
 | `phone` | *str* | `\(\d{3}\) \d{3}-\d{4}` | `CHAR(14) NOT NULL` |
 | `email` | *str* | `[a-z]+@bikes\.shop` | `VARCHAR(80) NOT NULL` |
-| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(80) NOT NULL` |
-| `city` | *str* | `[A-z ]+` | `VARCHAR(80) NOT NULL` |
+| `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | `VARCHAR(63) NOT NULL` |
+| `city` | *str* | `[A-z ]+` | `VARCHAR(40) NOT NULL` |
 | `state` | *str* | `[A-Z]{2}` | `CHAR(2) NOT NULL` |
-| `zip_code` | *int* | `\d{5}` | `MEDIUMINT(5) NOT NULL` |
+| `zip_code` | *int* | `\d{5}` | `MEDIUMINT UNSIGNED NOT NULL` |
+
+##### Keys
+`PRIMARY KEY (store_id)`
 
 ##### Kommentarer
 Jeg har valgt at introducere et heltal `store_id` som primary key, da det er besværligt at skulle skrive hele butiksnavnet, hver gang data fra tabellen skal bruges. Der er også risiko for at komme til at lave stavefejl, hvorimod et heltal på et enkelt ciffer er meget hurtigere at bruge og sværere at skrive forkert.
 Derudover har butiksnavnet formatet [bynavn] + 'Bikes'. I USA er der alt efter kilden mellem 34 og 67 forskellige befolkede steder med toponymet Springfield. Hvis virksomheden en dag havde en afdeling i flere forskellige byer ved navn Springfield, ville `name` ikke kunne bruges som primary key, da de alle ville hedde 'Springfield Bikes', eller måske 'Springfield Bikes Oregon'. Det er sikrere at bruge `store_id`.
+
+Mange af `VARCHAR`-længderne forklares [her](#kommentarer-2).
 
 ### Loading
 Da vi på kurset har arbejdet med MySQL, er det kun naturligt, at den samlede data lagres i sådan en databse.
