@@ -92,7 +92,7 @@ class Database(connector.DatabaseConnector):
 
     def _execute(self,
         query: str,
-        params: dict[str] | list[dict[str]] = {},
+        params: dict[str, typing.Any] | list[dict[str, typing.Any]] = {},
         db: bool = True,
         read: bool = False,
         select: bool = False
@@ -109,7 +109,7 @@ class Database(connector.DatabaseConnector):
             bestemt af brugeren, der skal indsættes sikkert i queriet,
             bl.a. for at undgå SQL injection.
             *Upåkrævet*. Standardværdi: ``{}``
-        :type params: dict[str] | list[dict[str]]
+        :type params: dict[str, Any] | list[dict[str, Any]]
         :param db: Bestemmer om handlingen udføres i en specifik database eller direkte.
             Skal være ``False`` ved f.eks. oprettelse af ny database eller nulstilning af database.
             *Påkrævet*. Standardværdi: ``True``
@@ -217,7 +217,7 @@ class Database(connector.DatabaseConnector):
         columns: str,
         table_name: str = "table",
         primary_key: str = '',
-        foreign_key: dict[str] = {}
+        foreign_key: dict[str, str] = {}
     ) -> None:
         """
         Opretter en ny tabel ud fra de angivne oplysninger.
@@ -397,7 +397,7 @@ class Database(connector.DatabaseConnector):
     def read(self,
         table_name: str,
         *column_name: str,
-        joins: list[dict[str]] = [],
+        joins: list[dict[str, str]] = [],
         order: int | str = 0,
         direction: str = 'a',
         limit: int = 0,
@@ -421,7 +421,7 @@ class Database(connector.DatabaseConnector):
                 "join_type": JOIN-type
             }`` i brug, men parameteren ``"left"`` kan også oplyses om nødvendigt.
             *Upåkrævet*. Standardværdi: ``[]``
-        :type joins: list[dict[str]]
+        :type joins: list[dict[str, str]]
         :param order: Kolonnen, som resultatet ordnes efter.
             Enten *int*, der vælger indekset af kolonnen blandt de valgte kolonner,
             eller *str*, der vælger ud fra navnet på kolonnen.
@@ -442,7 +442,7 @@ class Database(connector.DatabaseConnector):
         :type offset: int
 
         :return: En liste med rækker indeholdende data fra de(n) valgte kolonne(r).
-        :rtype: list[tuple]
+        :rtype: list[dict[str, Any]]
         :return: Hvis READ-operationen ikke kunne gennemføres.
         :rtype: None
         """
@@ -467,29 +467,10 @@ class Database(connector.DatabaseConnector):
                 select_query += self._join(left=table_name, **join)
 
         # Tilføjer where-constraints
-        # TODO: Tilføj OR osv.?
-        # TODO: Kan dette flyttes til sin egen funktion?
         if kwargs:
-            where_query = []
-            where_params = {}
-            # For hver kwarg ses det, om det er et WHERE keyword
-            for key, value in kwargs.items():
-                kwarg_query, kwarg_params = self._where(key, value, len(where_query))
-                # Hvis ja, opbevares de resulterende query-dele og parametre
-                if kwarg_query:
-                    where_query.append(kwarg_query)
-                if kwarg_params:
-                    where_params.update(kwarg_params)
-
-            # Hvis der både er query-dele og parametre, genereres queriet, og parametrene tilføjes
-            if where_query and where_params:
-                select_query += " WHERE"
-                # Hvis der er mere end 1 query-del, sættes de sammen med AND
-                if len(where_query) > 1:
-                    select_query += " AND".join(where_query)
-                else:
-                    select_query += f" {where_query[0]}"
-                select_params.update(where_params)
+            where_query, where_params = self._where(**kwargs)
+            select_query += where_query
+            select_params.update(where_params)
 
         # Tilføjer sorteringsretning
         # quickfix: (sættes nu altid på queriet, da joins sorteres efter nyligst joinede tabel?)
@@ -508,7 +489,30 @@ class Database(connector.DatabaseConnector):
             print(f"SUCCES: Dataene blev læst fra '{table_name}'.")
             return result
 
-    def _where(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
+    def _where(self, **kwargs):
+        # TODO: Tilføj OR osv.?
+        where_queries = []
+        where_params = {}
+        # For hver kwarg ses det, om det er et WHERE keyword
+        for key, value in kwargs.items():
+            kwarg_query, kwarg_params = self._where_type(key, value, len(where_queries))
+            # Hvis ja, opbevares de resulterende query-dele og parametre
+            if kwarg_query:
+                where_queries.append(kwarg_query)
+            if kwarg_params:
+                where_params.update(kwarg_params)
+
+        # Hvis der både er query-dele og parametre, genereres queriet, og parametrene tilføjes
+        if where_queries and where_params:
+            where_query = " WHERE"
+            # Hvis der er mere end 1 query-del, sættes de sammen med AND
+            if len(where_queries) > 1:
+                where_query += " AND".join(where_queries)
+            else:
+                where_query += f" {where_queries[0]}"
+            return where_query, where_params
+
+    def _where_type(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
         kwarg_query = f" `{value[0]}`"
         kwarg_params = {}
         # WHERE column_name LIKE val
@@ -598,7 +602,7 @@ class Database(connector.DatabaseConnector):
 
         return query
 
-    def _limit(self, limit: int, offset: int = 0) -> tuple[str, dict[str]]:
+    def _limit(self, limit: int, offset: int = 0) -> tuple[str, dict[str, typing.Any]]:
         """
         Konstruerer LIMIT- og OFFSET-delen af et query.
 
@@ -611,7 +615,7 @@ class Database(connector.DatabaseConnector):
 
         :return: En tuple bestående af en tekststreng til queriet,
             samt en dict med parametre til eksekveringen af queriet.
-        :rtype: tuple[str, dict[str]]
+        :rtype: tuple[str, dict[str, Any]]
         """
         query = ''
         params = {}
@@ -718,20 +722,15 @@ class Database(connector.DatabaseConnector):
     # UPDATE-operationer
     def update(self,
         table_name: str,
-        where: str,
-        old_value,
         change: str,
-        new_value
+        new_value: typing.Any,
+        **kwargs
     ) -> None:
         """
         _summary_
 
         :param table_name: Tabellen, hvori data skal opdateres.
         :type table_name: str
-        :param where: Kolonnen, hvor WHERE tjekkes.
-        :type where: str
-        :param old_value: Værdien, der tjekkes efter i WHERE.
-        :type old_value: Any
         :param change: Kolonnen, hvor værdien ændres.
         :type change: str
         :param new_value: Værdien, der ændres til.
@@ -740,6 +739,7 @@ class Database(connector.DatabaseConnector):
         # UPDATE TABLE table_name
         # SET change = new_value
         # WHERE where = old_value
+        # WHERE bruger self._where()
         pass
 
     def add(self, table_name: str, column_name: str, datatype: str) -> None:
@@ -757,7 +757,7 @@ class Database(connector.DatabaseConnector):
         if self._execute(alter_query):
             print(f"SUCCES: Tilføjede kolonnen '{column_name}' som primary key for tabellen '{table_name}'")
 
-    def foreign_key(self, table_name: str, foreign_key: dict[str]) -> None:
+    def foreign_key(self, table_name: str, foreign_key: dict[str, str]) -> None:
         alter_queries = []
         for key in foreign_key:
             split_key = foreign_key[key].split('.')
