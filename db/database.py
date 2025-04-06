@@ -4,6 +4,7 @@ import datetime
 import decimal
 from . import util
 from . import connector
+from intertable import *
 
 class Database(connector.DatabaseConnector):
     """
@@ -92,7 +93,7 @@ class Database(connector.DatabaseConnector):
 
     def _execute(self,
         query: str,
-        params: dict[str, typing.Any] | list[dict[str, typing.Any]] = {},
+        params: Parameter | list[Parameter] = {},
         db: bool = True,
         read: bool = False,
         select: bool = False
@@ -214,10 +215,12 @@ class Database(connector.DatabaseConnector):
             print(f"SUCCES: Databasen '{database_name}' blev oprettet.")
 
     def create(self,
-        columns: str,
-        table_name: str = "table",
-        primary_key: str = '',
-        foreign_key: dict[str, str] = {}
+        columns: str, # TableHeader
+        table_name: TableName = "table",
+        # keys: TableKeys = {},
+        primary_key: ColumnName | ConstraintList = '',
+        foreign_key: ForeignKeys = {}
+        # unique_key: Constraint | ConstraintList = ''
     ) -> None:
         """
         Opretter en ny tabel ud fra de angivne oplysninger.
@@ -260,8 +263,6 @@ class Database(connector.DatabaseConnector):
             else:
                 create_query += "VARCHAR(80) NOT NULL"
 
-            # if column == primary_key:
-            #     create_query += " PRIMARY KEY"
             create_query += ", "
         create_query = create_query[:-2] + ')'
 
@@ -272,16 +273,21 @@ class Database(connector.DatabaseConnector):
 
         if primary_key:
             self.primary_key(table_name, primary_key)
+        #     self.add_key(table_name, unique_key)
         # if foreign_key:
         #     self.foreign_key(table_name, foreign_key)
+        #     # self.add_key(table_name, foreign_key)
+        # if unique_key:
+        #     self.add_key(table_name, unique_key)
 
     # TODO: Forsøg at matche kolonnenavne fra dataens header med kolonnenavne fra den valgte tabel
     # TODO: Implementér et system til at skippe eller overwrite, hvis et felt i en række i datasættet
     # har samme værdi som ditto i tabellen. Hvis altså kolonnen har PRIMARY KEY eller UNIQUE som constraint.
     def insert(self,
-        data: list[str],
-        table_name: str,
+        data: list[str], # TableData
+        table_name: TableName,
         header: bool = True
+        # header: TableHeader
     ) -> None:
         """
         Indsætter en eller flere rækker data i en tabel.
@@ -358,7 +364,11 @@ class Database(connector.DatabaseConnector):
         if self._execute(insert_query, insert_params):
             print(f"SUCCES: Data indsat i tabellen '{table_name}'.")
 
-    def new_table(self, data: list[str], table_name: str = "table", header: str = '') -> None:
+    def new_table(self,
+            data: list[str], # TableData
+            table_name: TableName = "table",
+            header: str = '' # TableHeader
+        ) -> None:
         """
         Opretter en ny tabel og indsætter data i den.
 
@@ -394,15 +404,15 @@ class Database(connector.DatabaseConnector):
     # READ-operationer
     # TODO: Tilføj en måde, hvorpå foreign keys kan bruges til at joine eller læse data fra andre tabeller
     def read(self,
-        table_name: str,
-        *column_name: str,
-        joins: list[dict[str, str]] = [],
-        order: int | str = 0,
+        table_name: TableName,
+        *column_name: ColumnName,
+        joins: list[dict[str, TableName | ColumnName]] = [],
+        order: int | ColumnName = 0,
         direction: str = 'a',
         limit: int = 0,
         offset: int = 0,
         **kwargs
-    ) -> list[dict[str, typing.Any]] | None:
+    ) -> TableData | None:
         """
         Læser data fra en tabel.
 
@@ -567,7 +577,7 @@ class Database(connector.DatabaseConnector):
             kwarg_query = ''
         return kwarg_query, kwarg_params
 
-    def _sort(self, column_name: str | tuple[str], order: int | str = 0, direction: str = 'a') -> str:
+    def _sort(self, column_name: ColumnName | tuple[ColumnName], order: int | str = 0, direction: str = 'a') -> str:
         """
         Konstruerer ORDER BY- og ASC/DESC-delen af et query.
 
@@ -601,7 +611,7 @@ class Database(connector.DatabaseConnector):
 
         return query
 
-    def _limit(self, limit: int, offset: int = 0) -> tuple[str, dict[str, typing.Any]]:
+    def _limit(self, limit: int, offset: int = 0) -> tuple[str, Parameter]:
         """
         Konstruerer LIMIT- og OFFSET-delen af et query.
 
@@ -629,10 +639,10 @@ class Database(connector.DatabaseConnector):
 
     # TODO: Lav måske en slags auto-join ud fra foreign keys
     def _join(self,
-        left: str,
-        right: str,
-        on_left: str,
-        on_right: str,
+        left: TableName,
+        right: TableName,
+        on_left: ColumnName,
+        on_right: ColumnName,
         join_type: str = 'i',
     ) -> str:
         """
@@ -685,7 +695,7 @@ class Database(connector.DatabaseConnector):
 
         return join_query
 
-    def info(self, table_name: str = '') -> list[tuple[str, str, str, str, typing.Any, str]] | list[tuple[str]] | bool:
+    def info(self, table_name: TableName = '') -> DataField | list[tuple[TableName]] | bool:
         """
         Henter info om databasens eller en tabels opbygning.
 
@@ -719,7 +729,7 @@ class Database(connector.DatabaseConnector):
                 print(f"SUCCES: Hentede info om databasen '{self.database}'.")
         return table_info
 
-    def get_header(self, table: str | list[tuple[str]]) -> dict[str, dict[str, str]]:
+    def get_header(self, table: TableName | DataField) -> TableHeader:
         header = {}
         if isinstance(table, str):
             table = self.info(table)
@@ -733,19 +743,19 @@ class Database(connector.DatabaseConnector):
             }
         return header
 
-    def _find_constraints(self, table: str | list[tuple[str]], primary: bool = True) -> str | list[str]:
+    def _find_constraints(self, table: TableName | DataField, primary: bool = True) -> ColumnName | ConstraintList:
         if isinstance(table, str):
             table = self.info(table)
         keys = [column_info[0] for column_info in table if column_info[3] == ("PRI" if primary else "UNI")]
         return keys[0] if len(keys) == 1 else keys
-    
-    def primary_keys(self, table: str | list[tuple[str]]) -> str | list[str]:
+
+    def primary_keys(self, table: TableName | DataField) -> ColumnName | ConstraintList:
         return self._find_constraints(table, True)
 
-    def unique_keys(self, table: str | list[tuple[str]]) -> str | list[str]:
+    def unique_keys(self, table: TableName | DataField) -> ColumnName | ConstraintList:
         return self._find_constraints(table, False)
 
-    def foreign_keys(self, table_name: str) -> dict[str, tuple[str]]:
+    def foreign_keys(self, table_name: TableName) -> ForeignKeys:
         # primary_keys = []
         foreign_keys = {}
 
@@ -773,7 +783,7 @@ class Database(connector.DatabaseConnector):
 
         return foreign_keys
 
-    def get_keys(self, table_name: str, table_info: list[tuple[str]] = []) -> dict[str, str | list[str] | dict[str, tuple[str]]]:
+    def get_keys(self, table_name: TableName, table_info: DataField = []) -> TableKeys:
         keys = {}
         if not table_info:
             table_info = self.info(table_name)
@@ -794,8 +804,8 @@ class Database(connector.DatabaseConnector):
             keys["unique"] = unique_keys
 
         return keys
-    
-    def get_table(self, table_name: str) -> dict[str, str | dict[str, dict[str, str]] | dict[str, str | list[str] | dict[str, tuple[str]]] | list[dict[str, typing.Any]]]:
+
+    def get_table(self, table_name: TableName) -> Table:
         # Finder grundlæggende info
         table_info = self.info(table_name)
 
@@ -812,8 +822,8 @@ class Database(connector.DatabaseConnector):
 
     # UPDATE-operationer
     def update(self,
-        table_name: str,
-        change: str,
+        table_name: TableName,
+        change: ColumnName,
         new_value: typing.Any,
         **kwargs
     ) -> None:
@@ -833,22 +843,22 @@ class Database(connector.DatabaseConnector):
         # WHERE bruger self._where()
         pass
 
-    def add(self, table_name: str, column_name: str, datatype: str) -> None:
+    def add(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
         # ALTER TABLE table_name ADD colum_name datatype
         pass
 
-    def modify(self, table_name: str, column_name: str, datatype: str) -> None:
+    def modify(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
         # ALTER TABLE table_name MODIFY COLUMN column_name datatype
         pass
 
-    def primary_key(self, table_name: str, column_name: str) -> None:
+    def primary_key(self, table_name: TableName, column_name: ColumnName) -> None:
         alter_query = f"ALTER TABLE `{table_name}` ADD PRIMARY KEY (`{column_name}`)"
 
         self._preview(alter_query)
         if self._execute(alter_query):
             print(f"SUCCES: Tilføjede kolonnen '{column_name}' som primary key for tabellen '{table_name}'")
 
-    def foreign_key(self, table_name: str, foreign_key: dict[str, str]) -> None:
+    def foreign_key(self, table_name: TableName, foreign_key: dict[str, str]) -> None: # dict[ColumnName, tuple[TableName, ColumnName]]
         alter_queries = []
         for key in foreign_key:
             split_key = foreign_key[key].split('.')
@@ -863,7 +873,7 @@ class Database(connector.DatabaseConnector):
 
 
     # DELETE-operationer
-    def delete(self, table_name: str, where: str, value: str) -> None:
+    def delete(self, table_name: TableName, where: ColumnName, value: str) -> None:
         # DELETE FROM table_name WHERE where = value
         # if not where and not value:
         #   DELETE FROM table_name
@@ -874,7 +884,7 @@ class Database(connector.DatabaseConnector):
     # TODO: DROP kan også bruges på en hel database eller en kolonne:
     # DROP DATABASE database
     # ALTER TABLE table_name DROP COLUMN column_name
-    def drop(self, table_name: str, force: bool = False) -> None:
+    def drop(self, table_name: TableName, force: bool = False) -> None:
         """
         Fjerner en tabel helt fra databasen.
 
@@ -896,7 +906,7 @@ class Database(connector.DatabaseConnector):
             if self._execute(drop_query):
                 print(f"SUCCES: Tabellen '{table_name}' blev fjernet.")
 
-    def empty(self, table_name: str, force: bool = False) -> None:
+    def empty(self, table_name: TableName, force: bool = False) -> None:
         """
         Rydder en tabel for al data, men fjerner ikke tabellen.
 
