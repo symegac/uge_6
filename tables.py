@@ -1,23 +1,24 @@
 import os
-import os.path
 import requests
-import polars as pl
 from db.database import Database
 from db import util
+from config import *
 
-host, password = open("secret.txt", 'r', encoding="utf-8").readline().split(',')
 all_tables = []
 
 # Finder info om de forskellige paths, der findes i API'en (hvis man nu antager, at vi ikke kender alle de forskellige datasæt, der ligger der)
-api_response = requests.get(f"http://{host}:8000/openapi.json").json()
+api_response = requests.get(f"http://{API.host}:{API.port}/openapi.json").json()
 # Tager tabelnavne fra paths (fjerner '/')
 api_tables = [table[1:] for table in api_response["paths"]]
 input(api_tables)
 
 # Forbinder til database
-source_db = Database("root", password, "ProductDB", host=host, port="3306")
+source_db = Database(DB.username, DB.password, DB.database, host=DB.host, port=DB.port)
+# Opretter tabeller i databasen
+source_db.create(util.read_csv("staffs.csv", "data_csv")[0], util.get_name(os.path.join("data_csv", "staffs.csv")))
 # Finder info om tabeller i databasen
-db_tables = [table[0] for table in source_db.info()]
+db_info = source_db.info()
+db_tables = [table[0] for table in db_info]
 input(db_tables)
 
 # Finder alt i 'data_csv'-mappen

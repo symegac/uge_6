@@ -311,8 +311,7 @@ class Database(connector.DatabaseConnector):
         rows = [row.strip('\n').split(',') for row in rows]
 
         # Henter info om tabellen
-        table_info = self.info(table_name)
-        if not table_info:
+        if not (table_info := self.info(table_name)):
             return
         # Tjekker om alle rækker i den inputtede dataliste har samme antal felter, som der er kolonner i den angivne tabel,
         # dvs. om længden af hver række (list[str]) er den samme som længden af headerinfoen (list[tuple])
@@ -686,7 +685,7 @@ class Database(connector.DatabaseConnector):
 
         return join_query
 
-    def info(self, table_name: str = '') -> list[tuple] | None:
+    def info(self, table_name: str = '') -> list[tuple[str, str, str, str, typing.Any, str]] | list[tuple[str]] | bool:
         """
         Henter info om databasens eller en tabels opbygning.
 
@@ -695,15 +694,16 @@ class Database(connector.DatabaseConnector):
             *Påkrævet*. Standardværdi: ``''``
         :type table_name: str
 
-        :return: En liste indeholdende info om hver kolonne i tabellen, herunder navn og datatype.
-        :rtype: list[tuple]
+        :return: En liste indeholdende en tuple med info for hver kolonne i tabellen.
+            Tuplen indeholder navn, datatype, nullability, nøgletype, standardværdi og .
+        :rtype: list[tuple[str, str, str, str, typing.Any, str]]
         :return: En liste indeholdende info om hver tabel i databasen, herunder navn.
-        :rtype: list[tuple]
+        :rtype: list[tuple[str]]
         :return: Hvis READ-operationen ikke kunne gennemføres.
-            Enten fordi, der ikke er nogen forbindelse til en database
-        :rtype: None
+            Enten fordi der ikke er nogen forbindelse til en database,
+            eller forbi tabellen eller databasen ikke eksisterer.
+        :rtype: bool: ``False``
         """
-        describe_query = ''
         if table_name:
             describe_query = f"DESCRIBE `{table_name}`"
         else:
@@ -711,13 +711,104 @@ class Database(connector.DatabaseConnector):
 
         self._preview(describe_query)
 
-        table_info = self._execute(describe_query, read=True)
-        if table_info:
+        # Hvis handlingen gennemføres, printes succesbesked
+        if table_info := self._execute(describe_query, read=True):
             if table_name:
                 print(f"SUCCES: Hentede info om tabellen '{table_name}'.")
             else:
                 print(f"SUCCES: Hentede info om databasen '{self.database}'.")
-            return table_info
+        return table_info
+
+    def get_header(self, table: str | list[tuple[str]]) -> dict[str, dict[str, str]]:
+        header = {}
+        if isinstance(table, str):
+            table = self.info(table)
+        for column_info in table:
+            header[column_info[0]] = {
+                "type": column_info[1],
+                "nullable": True if column_info[2] == "YES" else False,
+                #"key": ,
+                "default": column_info[4],
+                "extra": column_info[5]
+            }
+        return header
+
+    def _find_constraints(self, table: str | list[tuple[str]], primary: bool = True) -> str | list[str]:
+        if isinstance(table, str):
+            table = self.info(table)
+        keys = [column_info[0] for column_info in table if column_info[3] == ("PRI" if primary else "UNI")]
+        return keys[0] if len(keys) == 1 else keys
+    
+    def primary_keys(self, table: str | list[tuple[str]]) -> str | list[str]:
+        return self._find_constraints(table, True)
+
+    def unique_keys(self, table: str | list[tuple[str]]) -> str | list[str]:
+        return self._find_constraints(table, False)
+
+    def foreign_keys(self, table_name: str) -> dict[str, tuple[str]]:
+        # primary_keys = []
+        foreign_keys = {}
+
+        # Læser info om databasen
+        constraints = self.read(
+            "INFORMATION_SCHEMA.KEY_COLUMN_USAGE",
+            "CONSTRAINT_SCHEMA", "CONSTRAINT_NAME",
+            #"TABLE_SCHEMA",
+            "TABLE_NAME", "COLUMN_NAME",
+            #"REFERENCED_TABLE_SCHEMA",
+            "REFERENCED_TABLE_NAME", "REFERENCED_COLUMN_NAME",
+            eq=("CONSTRAINT_SCHEMA", self.database),
+            eq2=("TABLE_NAME", table_name)
+        )
+        for constraint in constraints:
+            # Finder primary key(s)
+            # if constraint["CONSTRAINT_NAME"] == "PRIMARY":
+            #     primary_keys.append(constraint["COLUMN_NAME"])
+            # Finder foreign keys
+            if constraint["REFERENCED_TABLE_NAME"] is not None:
+                foreign_keys[constraint["COLUMN_NAME"]] = (
+                    constraint["REFERENCED_TABLE_NAME"],
+                    constraint["REFERENCED_COLUMN_NAME"],
+                )
+
+        return foreign_keys
+
+    def get_keys(self, table_name: str, table_info: list[tuple[str]] = []) -> dict[str, str | list[str] | dict[str, tuple[str]]]:
+        keys = {}
+        if not table_info:
+            table_info = self.info(table_name)
+
+        # Finder de forskellige typer keys
+        foreign_keys = self.foreign_keys(table_name)
+        primary_keys = self.primary_keys(table_info)
+        unique_keys = self.unique_keys(table_info)
+        # Hvis der er én primary key, sættes den på for sig selv
+        # Hvis der er en multicol pk, sættes hele listen på
+        if primary_keys:
+            keys["primary"] = primary_keys
+        # Hvis der er foreign keys, sættes hele dicten på
+        if foreign_keys:
+            keys["foreign"] = foreign_keys
+        # Hvis der er unikke keys, sættes de på (samme procedure som for pk)
+        if unique_keys:
+            keys["unique"] = unique_keys
+
+        return keys
+    
+    def get_table(self, table_name: str) -> dict[str, str | dict[str, dict[str, str]] | dict[str, str | list[str] | dict[str, tuple[str]]] | list[dict[str, typing.Any]]]:
+        # Finder grundlæggende info
+        table_info = self.info(table_name)
+
+        # Indsætter tabelnavn
+        table = {"name": table_name}
+        # Indsætter header
+        table["header"] = self.get_header(table_info)
+        # Indsætter primary, foreign og unique keys
+        table["keys"] = self.get_keys(table_name, table_info)
+        # Indsætter data
+        table["data"] = self.read(table_name)
+
+        return table
 
     # UPDATE-operationer
     def update(self,
