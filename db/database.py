@@ -1,8 +1,9 @@
 import getpass
+import typing
+import datetime
+import decimal
 from . import util
 from . import connector
-# import datetime
-# import decimal
 
 class Database(connector.DatabaseConnector):
     """
@@ -76,24 +77,25 @@ class Database(connector.DatabaseConnector):
         # Initialiserer connectoren
         super().__init__(username, password, database, host, port)
 
-        # Hvis forbindelsen ikke kan skabes (f.eks. fordi det angivne databasenavn ikke eksisterer),
-        # kan brugeren forsøge at oprette en database med navnet
-        if self.database and not self.connection:
-            new = input(f"Vil du forsøge at oprette en ny database med navnet '{self.database}'? (j/N): ")
-            if new.lower() in ['j', 'y']:
-                self.create_database(self.database)
-                # Skal logge ind igen for at forny forbindelserne
-                self._first_login(getpass.getpass("Indtast adgangskode igen: "))
-
-        # Loader tabeller til databasen fra start, hvis nogen oplyses
-        if self.connection and init_load:
-            self.load(*init_load)
+        if self.database:
+            # Hvis forbindelsen ikke kan skabes (f.eks. fordi det angivne databasenavn ikke eksisterer),
+            # kan brugeren forsøge at oprette en database med navnet
+            if not self.connection:
+                new = input(f"Vil du forsøge at oprette en ny database med navnet '{self.database}'? (j/N): ")
+                if new.lower() in ['j', 'y']:
+                    self.create_database(self.database)
+                    # Skal logge ind igen for at forny forbindelserne
+                    self._full_login(getpass.getpass("Indtast adgangskode igen: "))
+            # Loader tabeller til databasen fra start, hvis nogen oplyses
+            elif init_load:
+                self.load(*init_load)
 
     def _execute(self,
         query: str,
         params: dict[str] | list[dict[str]] = {},
         db: bool = True,
         read: bool = False,
+        select: bool = False
     ) -> bool | list[tuple]:
         """
         Eksekverer et SQL-query.
@@ -125,8 +127,12 @@ class Database(connector.DatabaseConnector):
         :rtype: list[tuple]
         """
         connection = self.connection if db else self.direct_connection
+        if not connection:
+            self._error(f"Kan ikke udføre nogen handlinger uden en forbindelse til {"databasen" if db else "serveren"}.")
+            quit()
+
         try:
-            with connection.cursor(buffered=True if read else False) as cursor:
+            with connection.cursor(buffered=read, dictionary=select) as cursor:
                 # Hvis 'params' er en liste, køres queriet for hver gruppe 'params'
                 if isinstance(params, list):
                     cursor.executemany(query, params)
@@ -143,7 +149,10 @@ class Database(connector.DatabaseConnector):
                 return cursor.fetchall()
         except Exception as err:
             self._error("Kunne ikke eksekvere queriet.", err)
-            return False
+            force = input("Fortsæt kørsel af programmet alligevel? (j/N): ")
+            if force.lower() in ['j', 'y']:
+                return False
+            quit()
         else:
             return True
 
@@ -394,7 +403,7 @@ class Database(connector.DatabaseConnector):
         limit: int = 0,
         offset: int = 0,
         **kwargs
-    ) -> list[tuple] | None:
+    ) -> list[dict[str, typing.Any]] | None:
         """
         Læser data fra en tabel.
 
@@ -450,7 +459,7 @@ class Database(connector.DatabaseConnector):
         # Ellers vælges alle kolonner
         else:
             select_query += '*'
-        select_query += f" FROM `{table_name}`"
+        select_query += f" FROM {self._format_column(table_name)}"
 
         # Tilføjer join(s)
         if joins:
@@ -465,7 +474,7 @@ class Database(connector.DatabaseConnector):
             where_params = {}
             # For hver kwarg ses det, om det er et WHERE keyword
             for key, value in kwargs.items():
-                kwarg_query, kwarg_params = self._kwargs(key, value, len(where_query))
+                kwarg_query, kwarg_params = self._where(key, value, len(where_query))
                 # Hvis ja, opbevares de resulterende query-dele og parametre
                 if kwarg_query:
                     where_query.append(kwarg_query)
@@ -494,12 +503,12 @@ class Database(connector.DatabaseConnector):
 
         self._preview(select_query)
 
-        result = self._execute(select_query, select_params, read=True)
+        result = self._execute(select_query, select_params, read=True, select=True)
         if result:
             print(f"SUCCES: Dataene blev læst fra '{table_name}'.")
             return result
 
-    def _kwargs(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
+    def _where(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
         kwarg_query = f" `{value[0]}`"
         kwarg_params = {}
         # WHERE column_name LIKE val
@@ -654,8 +663,8 @@ class Database(connector.DatabaseConnector):
             if table not in tables:
                 print(f"Tabellen '{table}' findes ikke i databasen.")
                 return ''
-        left_columns = [column[0] for column in self.info(left)]
-        right_columns = [column[0] for column in self.info(right)]
+        left_columns = [column[0] for column in self.info(left)]        # hurtigere end list(zip(*self.info(left)))[0] ?
+        right_columns = [column[0] for column in self.info(right)]      # hurtigere end list(zip(*self.info(left)))[0] ?
         if on_left not in left_columns or on_right not in right_columns:
             return ''
 
@@ -687,16 +696,14 @@ class Database(connector.DatabaseConnector):
         :return: En liste indeholdende info om hver tabel i databasen, herunder navn.
         :rtype: list[tuple]
         :return: Hvis READ-operationen ikke kunne gennemføres.
+            Enten fordi, der ikke er nogen forbindelse til en database
         :rtype: None
         """
         describe_query = ''
         if table_name:
             describe_query = f"DESCRIBE `{table_name}`"
-        elif self.connection.database is not None:
+        else:
             describe_query = "SHOW TABLES"
-
-        if not describe_query:
-            return
 
         self._preview(describe_query)
 

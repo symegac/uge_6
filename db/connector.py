@@ -1,7 +1,6 @@
 import mysql.connector
 import getpass
 
-# TODO: Tilføj måde at prøve login igen, hvis forbindelse ikke kunne oprettes pga. forkert logininfo
 class DatabaseConnector:
     """
     Henter og gemmer loginoplysninger til en serverforbindelse, evt. en specifik database,
@@ -59,7 +58,7 @@ class DatabaseConnector:
         :type port: str
         """
         if not username:
-            self.username = input("Indtast brugernavn: ")
+            self.username = input("Indtast brugernavn: ").strip()
         else:
             self.username = username
 
@@ -74,7 +73,7 @@ class DatabaseConnector:
         # Databasenavne er som standard case insensitive i MySQL
         # Man kunne måske lave mere validering af det angivne databasenavns format
         if not database:
-            self.database = input("Indtast databasenavn (eller blank for direkte login): ")
+            self.database = input("Indtast databasenavn (eller blank for direkte login): ").strip()
         else:
             self.database = database
 
@@ -83,17 +82,12 @@ class DatabaseConnector:
         self.port = port
 
         # Forsøger at oprette forbindelser
-        self._first_login(password)
+        self._full_login(password)
 
-    def _error(msg: str, *err: str) -> None:
-        # Ad, grim quickfix af fejl
-        if len(err) > 1:
-            msg = err[-2]
-            err = err[-1]
-
+    def _error(self, msg: str, error: str) -> None:
         error_message = f"FEJL: {msg}"
-        if err:
-            error_message += f" Følgende fejl opstod:\n    {err}"
+        if error:
+            error_message += f" Følgende fejl opstod:\n    {error}"
         print(error_message)
 
     def _login(self, password: str, db: bool = True) -> mysql.connector.MySQLConnection | bool:
@@ -137,7 +131,7 @@ class DatabaseConnector:
 
         return connection
 
-    def _first_login(self, password: str):
+    def _full_login(self, password: str) -> None:
         """
         :param password: Adgangskoden, der bruges til at forbinde til server og database.
             *Påkrævet*.
@@ -145,13 +139,27 @@ class DatabaseConnector:
         """
         # Forbinder direkte... (skal bruges til oprettelse eller nulstilling)
         self.direct_connection = self._login(password, db=False)
-        if self.direct_connection:
-            print("SUCCES: Forbundet til serveren.")
+        while not self.direct_connection:
+            retry = input("Vil du forsøge at genindtaste brugernavn og adgangskode? (j/N): ")
+            if retry.lower() in ['j', 'y']:
+                self.username = input("Indtast brugernavn: ").strip()
+                password = getpass.getpass("Indtast adgangskode: ")
+                self.direct_connection = self._login(password, db=False)
+            else:
+                quit()
+        print("SUCCES: Forbundet til serveren.")
+
         # ...og til specifik database, hvis self.database er truthy (dvs. ikke tom)
         if self.database:
             self.connection = self._login(password, db=True)
-            if self.connection:
-                print(f"SUCCES: Forbundet til databasen '{self.database}'.")
+            while not self.connection:
+                retry = input("Vil du forsøge at genindtaste databasenavnet? (j/N): ")
+                if retry.lower() in ['j', 'y']:
+                    self.database = input("Indtast databasenavn: ").strip()
+                    self.connection = self._login(password, db=True)
+                else:
+                    return
+            print(f"SUCCES: Forbundet til databasen '{self.database}'.")
 
     def login(self) -> None:
         """
@@ -171,10 +179,13 @@ class DatabaseConnector:
         """
         Lukker forbindelserne til database og server.
         """
-        self.connection.close()
-        print(f"SUCCES: Lukkede forbindelsen til databasen '{self.database}'.")
-        self.direct_connection.close()
-        print("SUCCES: Lukkede forbindelsen til serveren.")
+        try:
+            self.connection.close()
+            print(f"SUCCES: Lukkede forbindelsen til databasen '{self.database}'.")
+            self.direct_connection.close()
+            print("SUCCES: Lukkede forbindelsen til serveren.")
+        except Exception as err:
+            self._error("Kunne ikke lukke forbindelsen.", err)
 
 if __name__ == "__main__":
     connection = DatabaseConnector()
