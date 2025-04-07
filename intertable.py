@@ -1,4 +1,135 @@
 import typing
+from dataclasses import dataclass
+
+STANDARD_FIELD = {"type": '', "nullable": True, "default": None, "extra": ''}
+
+class Keys:
+    def __init__(self,
+        primary_key: str | list[str] = '',
+        foreign_key: dict[str, tuple[str, str]] = {},
+        unique_key: str | list[str] = ''
+    ):
+        self._primary: ColumnName = None
+        self._foreign: dict[ColumnName, tuple[TableName, ColumnName]] = {}
+        self._unique: list[ColumnName] = None
+
+        if primary_key:
+            self.primary = primary_key
+        if foreign_key:
+            self.foreign = foreign_key
+        if unique_key:
+            self.unique = unique_key
+
+    def __str__(self):
+        return str(self.keys())
+
+    def __repr__(self):
+        repr_strings = []
+        if self.primary:
+            repr_strings.append(f"{self.primary=}"[5:])
+        if self.foreign:
+            repr_strings.append(f"{self.foreign=}"[5:])
+        if self.unique:
+            repr_strings.append(f"{self.unique=}"[5:])
+
+        return f"Keys({",\n     ".join(repr_strings)})"
+
+    def __eq__(self, other) -> bool:
+        return self.keys() == other
+
+    def _check_key(self, key: str | list[str]) -> None:
+        if not isinstance(key, (str, list)):
+            raise TypeError("Nøglen skal være en streng.")
+        if not key:
+            raise ValueError("Nøglen må ikke være tom. Den skal indeholde et kolonnenavn.")
+
+    @property
+    def primary(self):
+        if self._primary is None or not self._primary:
+            return None
+        return self._primary
+    
+    @primary.setter
+    def primary(self, key: str):
+        try:
+            self._check_key(key)
+        except Exception as err:
+            print("Ugyldig nøgle.", err)
+        else:
+            self._primary = key
+
+    @primary.deleter
+    def primary(self):
+        self._primary = None
+
+    @property
+    def foreign(self):
+        if not self._foreign:
+            return None
+        return self._foreign
+
+    @foreign.setter
+    def foreign(self, key: dict[str, tuple[str, str]]):
+        if not isinstance(key, dict):
+            print(f"Ugyldig nøgle {key}. Nøglen skal være en dict.")
+            return
+        for k in key:
+            if not isinstance(k, str):
+                print(f"Ugyldig nøgle {key}. Kolonnenavnet skal være en tekststreng.")
+                continue
+            if not k:
+                print(f"Ugyldig nøgle {key}. Kolonnenavnet må ikke være tomt.")
+                continue
+            ref = key[k]
+            if not isinstance(ref, tuple):
+                print(f"Ugyldig nøgle {key}. Referencen skal være en tuple.")
+                continue
+            if len(ref) != 2:
+                print(f"Ugyldig nøgle {key}. Referencen må ikke indeholde mere eller mindre end to elementer: Et tabelnavn og et kolonnenavn.")
+                continue
+            for r in ref:
+                if not isinstance(r, str):
+                    print(f"Ugyldig nøgle {key}. Referencen må kun indeholde tekststrenge.")
+                    break
+                if not r:
+                    print(f"Ugyldig nøgle {key}. Referencen må ikke indeholde tomme tekststrenge.")
+                    break
+            else:
+                self._foreign.update(key)
+
+    @foreign.deleter
+    def foreign(self):
+        self._foreign = {}
+
+    @property
+    def unique(self):
+        if self._unique is None or not self._unique:
+            return None
+        return self._unique
+
+    @unique.setter
+    def unique(self, key: str):
+        try:
+            self._check_key(key)
+        except Exception as err:
+            print("Ugyldig nøgle.", err)
+        else:
+            self._unique = key
+
+    @unique.deleter
+    def unique(self):
+        self._unique = None
+
+    def keys(self):
+        k = {}
+        if self._primary is not None:
+            k["primary"] = self._primary
+        if self._foreign:
+            k["foreign"] = self._foreign
+        if self._unique is not None:
+            k["unique"] = self._unique
+
+        return k
 
 Parameter = typing.NewType("Parameter", dict[str, typing.Any])
 """
@@ -40,18 +171,25 @@ ConstraintList = typing.NewType("ConstraintList", list[ColumnName])
 :param ConstraintList:
 :type ConstraintList: list[ColumnName]
 """
-TableKeys = typing.NewType("TableKeys", dict[str, ColumnName | ConstraintList | ForeignKeys])
-"""
-:param TableKeys:
-:type TableKeys: dict[str, ColumnName | ConstraintList | ForeignKeys]
-"""
+# TableKeys = typing.NewType("TableKeys", dict[str, ColumnName | ConstraintList | ForeignKeys])
+# """
+# :param TableKeys:
+# :type TableKeys: dict[str, ColumnName | ConstraintList | ForeignKeys]
+# """
 TableData = typing.NewType("TableData", list[DataEntry])
 """
 :param TableData:
 :type TableData: list[DataEntry]
 """
-Table = typing.NewType("Table", dict[str, TableName | TableHeader | TableKeys | TableData])
+Table = typing.NewType("Table", dict[str, TableName | TableHeader | Keys | TableData])
 """
 :param Table:
 :type Table: dict[str, TableName | TableHeader | TableKeys | TableData]
 """
+
+@dataclass(init=True, repr=True)
+class InterTable:
+    name: TableName
+    header: TableHeader
+    keys: Keys
+    data: DataEntry

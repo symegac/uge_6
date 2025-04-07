@@ -1,5 +1,5 @@
 from db.database import Database
-from config import *
+from config import DB
 
 # Forbinder til MySQL-database
 db = Database(DB.username, DB.password, DB.database, DB.host, DB.port, preview=False)

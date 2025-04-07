@@ -94,6 +94,7 @@ class Database(connector.DatabaseConnector):
     def _execute(self,
         query: str,
         params: Parameter | list[Parameter] = {},
+        /, *,
         db: bool = True,
         read: bool = False,
         select: bool = False
@@ -783,8 +784,8 @@ class Database(connector.DatabaseConnector):
 
         return foreign_keys
 
-    def get_keys(self, table_name: TableName, table_info: DataField = []) -> TableKeys:
-        keys = {}
+    def get_keys(self, table_name: TableName, table_info: DataField = []) -> Keys:
+        keys = Keys()
         if not table_info:
             table_info = self.info(table_name)
 
@@ -795,13 +796,13 @@ class Database(connector.DatabaseConnector):
         # Hvis der er én primary key, sættes den på for sig selv
         # Hvis der er en multicol pk, sættes hele listen på
         if primary_keys:
-            keys["primary"] = primary_keys
+            keys.primary = primary_keys
         # Hvis der er foreign keys, sættes hele dicten på
         if foreign_keys:
-            keys["foreign"] = foreign_keys
+            keys.foreign = foreign_keys
         # Hvis der er unikke keys, sættes de på (samme procedure som for pk)
         if unique_keys:
-            keys["unique"] = unique_keys
+            keys.unique = unique_keys
 
         return keys
 

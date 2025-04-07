@@ -14,10 +14,11 @@ input(api_tables)
 
 # Forbinder til database
 source_db = Database(DB.username, DB.password, DB.database, host=DB.host, port=DB.port)
-# Opretter tabeller i databasen
-source_db.create(util.read_csv("staffs.csv", "data_csv")[0], util.get_name(os.path.join("data_csv", "staffs.csv")))
+# Opretter tabeller i databasen (kun hvis localhost)
+# source_db.create(util.read_csv("staffs.csv", "data_csv")[0], util.get_name(os.path.join("data_csv", "staffs.csv")))
 # Finder info om tabeller i databasen
 db_info = source_db.info()
+source_db.logout()
 db_tables = [table[0] for table in db_info]
 input(db_tables)
 
