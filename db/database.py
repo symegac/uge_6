@@ -216,12 +216,9 @@ class Database(connector.DatabaseConnector):
             print(f"SUCCES: Databasen '{database_name}' blev oprettet.")
 
     def create(self,
-        columns: str, # TableHeader
-        table_name: TableName = "table",
-        # keys: TableKeys = {},
-        primary_key: ColumnName | ConstraintList = '',
-        foreign_key: ForeignKeys = {}
-        # unique_key: Constraint | ConstraintList = ''
+        columns: list[DataField],
+        table_name: TableName,
+        # keys: Keys = {},
     ) -> None:
         """
         Opretter en ny tabel ud fra de angivne oplysninger.
@@ -235,45 +232,46 @@ class Database(connector.DatabaseConnector):
         :param foreign_key: _description_, defaults to {}
         :type foreign_key: dict, optional
         """
-        header = columns.strip('\n').split(',')
-
-        # TODO: Omskriv denne del
         create_query = f"CREATE TABLE `{table_name}` ("
-        # Gætter datatype ud fra kolonnenavn
-        # Men det vile måske være smartere at gætte ud fra felternes værdi fra første række
-        # For dette gælde kun for de tre datasæt til opgaven
-        # Det kommer an på, om man følger en fast navngivningspraksis for kolonnerne i datasættene
-        for column in header:
-            create_query += f"`{column}` "
-            if "id" in column:
-                create_query += "INTEGER NOT NULL"
-            elif "name" in column:
-                create_query += "VARCHAR(80) NOT NULL"
-            elif "email" in column:
-                create_query += "VARCHAR(254) NOT NULL"
-            elif "price" in column:
-                # For dette datasæt er (P=8,D=5) i DECIMAL(P,D)
-                # Men for pengebeløb burde D vel egentlig være 2
-                create_query += "DECIMAL(10,5) NOT NULL"
-            elif "date" in column:
-                create_query += "DATETIME NOT NULL"
-            elif column in ["customer", "product", "quantity", "zip_code", "order_status"]:
-                create_query += "INTEGER NOT NULL"
-            elif "discount" in column:
-                create_query += "DECIMAL(3,2) NOT NULL"
-            else:
-                create_query += "VARCHAR(80) NOT NULL"
+        
+        column_queries = []
 
-            create_query += ", "
-        create_query = create_query[:-2] + ')'
+        for column in columns:
+            column_query = f"`{column.name}` {column.datatype}"
+            if not column.nullable:
+                column_query += " NOT NULL"
+            if column.default is not None:
+                column_query += f" DEFAULT {column.default}"
+            if column.extra:
+                column_query += ' ' + column.extra
+            column_queries.append(column_query)
+            # if "id" in column:
+            #     create_query += "INTEGER NOT NULL"
+            # elif "name" in column:
+            #     create_query += "VARCHAR(80) NOT NULL"
+            # elif "email" in column:
+            #     create_query += "VARCHAR(254) NOT NULL"
+            # elif "price" in column:
+            #     # For dette datasæt er (P=8,D=5) i DECIMAL(P,D)
+            #     # Men for pengebeløb burde D vel egentlig være 2
+            #     create_query += "DECIMAL(10,5) NOT NULL"
+            # elif "date" in column:
+            #     create_query += "DATETIME NOT NULL"
+            # elif column in ["customer", "product", "quantity", "zip_code", "order_status"]:
+            #     create_query += "INTEGER NOT NULL"
+            # elif "discount" in column:
+            #     create_query += "DECIMAL(3,2) NOT NULL"
+            # else:
+            #     create_query += "VARCHAR(80) NOT NULL"
+        create_query += ", ".join(column_queries) + ')'
 
         self._preview(create_query)
 
         if self._execute(create_query):
             print(f"SUCCES: Oprettede tabellen '{table_name}'.")
 
-        if primary_key:
-            self.primary_key(table_name, primary_key)
+        # if primary_key:
+        #     self.primary_key(table_name, primary_key)
         #     self.add_key(table_name, unique_key)
         # if foreign_key:
         #     self.foreign_key(table_name, foreign_key)

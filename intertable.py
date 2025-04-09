@@ -179,8 +179,7 @@ class DataField:
 
         self.name = name
         self.datatype = datatype
-        if nullable:
-            self.nullable = nullable
+        self.nullable = nullable
         if default is not None:
             self.default = default
         if extra:
@@ -217,7 +216,7 @@ class DataField:
         for valid_type in valid_types:
             if datatype.lower().startswith(valid_type):
                 if valid_type.endswith('('):
-                    if re.match(r"[a-z]+\(\d+\)", datatype) is not None:
+                    if re.match(r"[a-z]+\([\d,]+\)", datatype) is not None:
                         return True
                 else:
                     return True
