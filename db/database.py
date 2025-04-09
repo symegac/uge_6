@@ -572,7 +572,7 @@ class Database(connector.DatabaseConnector):
             kwarg_query += ", ".join(in_values)
             kwarg_query += ")"
 
-        # Hvis der ikke er tilføjet nogle parametre (dvs. hvis kwarg'et er ugyldigt),
+        # Hvis der ikke er tilføjet nogen parametre (dvs. hvis kwarg'et er ugyldigt),
         # så returneres en tom streng
         if not kwarg_params:
             kwarg_query = ''

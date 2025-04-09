@@ -55,16 +55,9 @@ def get_columns(row: dict[str, typing.Any] | list[dict[str, typing.Any]]) -> tup
 def intertable(name: str, data: list[dict[str, typing.Any]], primary_key: str | list[str]) -> Table:
     header = {column: STANDARD_FIELD for column in get_columns(data)}
 
-    keys = Keys(primary_key)
+    keys = Keys(primary_key, {"a": ("b", "c")})
 
-    table = {
-        "name": name,
-        "header": header,
-        "keys": keys.keys(),
-        "data": data
-    }
-
-    return table
+    return InterTable(name, header, keys, data)
 
 if __name__ == "__main__":
     from config import API
@@ -79,4 +72,4 @@ if __name__ == "__main__":
     order_items = intertable("order_items", api_data["order_items"], ["order_id", "item_id"])
     customers = intertable("customers", api_data["customers"], "customer_id")
 
-    print(orders["keys"], order_items["keys"], customers["keys"])
+    print(orders.keys, order_items.keys, customers.keys)
