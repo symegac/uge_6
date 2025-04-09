@@ -1,5 +1,7 @@
+import re
 import typing
-import hashlib
+from decimal import Decimal
+from datetime import date, datetime, time
 from dataclasses import dataclass
 
 STANDARD_FIELD = {"type": '', "nullable": True, "default": None, "extra": ''}
@@ -146,6 +148,23 @@ class Keys:
         return k
 
 class DataField:
+    VALID_TYPES = {
+        str: ["varchar(", "char(", "tinytext", "text", "mediumtext", "longtext"],
+        int: ["tinyint", "smallint", "mediumint", "int", "integer", "bigint", "year"],
+        float: ["float", "double"],
+        Decimal: ["decimal(", "numeric("],
+        bool: ["bool", "boolean"],
+        date: ["date"],
+        time: ["time", "timestamp"],
+        datetime: ["datetime"],
+        tuple: ["enum("],
+        set: ["set("],
+    }
+    # BINARIES
+    # bytes: / bytearray:
+    # "bit(", "binary(", "varbinary(",
+    # "tinyblob", "blob", "mediumblob", "longblob",
+
     def __init__(self,
         name: str,
         datatype: str = '',
@@ -153,7 +172,6 @@ class DataField:
         default: typing.Any = None,
         extra: str = ''
     ) -> None:
-        self._name = name
         self._datatype: str = ''
         self._nullable: bool = True
         self._default: typing.Any = None
@@ -168,31 +186,127 @@ class DataField:
         if extra:
             self.extra = extra
 
-    def _is_valid_name(name: str) -> bool:
+    def __repr__(self):
+        if not self.name or not self.datatype:
+            return None
+        col = {
+            self.name: {
+                "type": self.datatype,
+                "nullable": self.nullable
+            }
+        }
+        if self._default is not None:
+            col[self.name]["default"] = self.default
+        if self.extra:
+            col[self.name]["extra"] = self.extra
+
+        return repr(col)
+
+    def _is_valid_string(self, name: str) -> bool:
         if not name or name is None:
             return False
-        if any(';' in name, '%' in name, '`' in name, "--" in name):
+        # Tjekker om forbudte tegn er i tekststrengen
+        if any([';' in name, '%' in name, '`' in name, '.' in name, "--" in name]):
             return False
+        return True
 
-    def _is_valid_datatype(datatype: str) -> bool:
-        pass
+    def _is_valid_datatype(self, datatype: str) -> bool:
+        if not self._is_valid_string:
+            return False
+        valid_types = [subtype for datatype in DataField.VALID_TYPES.values() for subtype in datatype]
+        for valid_type in valid_types:
+            if datatype.lower().startswith(valid_type):
+                if valid_type.endswith('('):
+                    if re.match(r"[a-z]+\(\d+\)", datatype) is not None:
+                        return True
+                else:
+                    return True
+        return False
 
-    def _is_valid_default(default: typing.Any) -> bool:
-        pass
+    def _is_valid_default(self, default: typing.Any) -> bool:
+        # Hvis den angivne standardværdi er en tekststreng med forbudte tegn,
+        # så returneres der med det samme
+        if isinstance(default, str) and not self._is_valid_string(default):
+            return False
+        # Finder datatypenavn, hvis det er en variabel datatype
+        variable_type = self.datatype.find('(')
+        if variable_type > 0:
+            type_index = self.datatype[0:variable_type+1]
+        else:
+            type_index = self.datatype
+        # Hvis self.datatype ikke er i listen over gyldige datatyper pr. Python-type,
+        # så er den angivne standardværdi ikke gyldig
+        if type_index not in self.VALID_TYPES[type(default)]:
+            return False
+        return True
 
     @property
     def name(self):
         return self._name
+
+    @name.setter
+    def name(self, input_name: str):
+        if self._is_valid_string(input_name):
+            self._name = input_name
+        else:
+            print("Ugyldigt kolonnenavn.")
+
+    @property
+    def datatype(self):
+        if self._datatype:
+            return self._datatype
+        else:
+            return "varchar(255)"
     
+    @datatype.setter
+    def datatype(self, input_datatype: str):
+        if self._is_valid_datatype(input_datatype):
+            self._datatype = input_datatype
+        else:
+            print("Ugyldig datatype for kolonnen.")
+
+    @property
+    def nullable(self):
+        return self._nullable
+    
+    @nullable.setter
+    def nullable(self, is_nullable: bool):
+        if is_nullable:
+            self._nullable = True
+        if not is_nullable:
+            self._nullable = False
+
+    @nullable.deleter
+    def nullable(self):
+        self._nullable = True
+
+    @property
+    def default(self):
+        return self._default
+
+    @default.setter
+    def default(self, input_default: typing.Any):
+        if self._is_valid_default(input_default):
+            self._default = input_default
+        else:
+            print("Den angivne standardværdi passer ikke til den oplyste datatype.")
+
+    @default.deleter
+    def default(self):
+        self._default = None
+
     @property
     def extra(self):
-        if self._extra:
-            return self._extra
+        return self._extra
     
     @extra.setter
     def extra(self, ex: str):
         if "auto" in ex.lower():
             self._extra = "AUTO_INCREMENT"
+
+    @extra.deleter
+    def extra(self):
+        self.extra = ''
 
 Parameter = typing.NewType("Parameter", dict[str, typing.Any])
 """
@@ -204,11 +318,11 @@ ColumnName = typing.NewType("ColumnName", str)
 :param ColumnName:
 :type ColumnName: str
 """
-DataField = typing.NewType("DataField", dict[str, ColumnName | str | bool | typing.Any])
-"""
-:param DataField:
-:type DataField: dict{str, str | bool | typing.Any}
-"""
+# DataField = typing.NewType("DataField", dict[str, ColumnName | str | bool | typing.Any])
+# """
+# :param DataField:
+# :type DataField: dict{str, str | bool | typing.Any}
+# """
 DataEntry = typing.NewType("DataEntry", dict[ColumnName, typing.Any])
 """
 :param DataEntry:
@@ -259,3 +373,7 @@ class InterTable:
 
     def __repr__(self):
         return repr({"name": self.name, "header": self.header, "keys": self.keys, "data": self.data})
+
+if __name__ == "__main__":
+    test = DataField("hest", "varchar(80)", False, "fadslkjaseseg")
+    print(test)
