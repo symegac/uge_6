@@ -16,7 +16,7 @@ def main() -> bool:
         "/orders",
         "/order_items",
         "/customers",
-        host=API.remotehost,
+        host=API.localhost,
         port=API.port
     )
     # Rådataene gemmes i InterTable-formatet
@@ -27,9 +27,9 @@ def main() -> bool:
 ### DB ###
     # Database-objekt m. forbindelse oprettes
     source_db = Database(
-        DB.remoteusername, DB.remotepassword,
+        DB.localusername, DB.localpassword,
         "ProductDB",
-        DB.remotehost, DB.port,
+        DB.localhost, DB.port,
         preview=False
     )
     # De fire tabeller gemmes i InterTable-formatet
@@ -45,10 +45,6 @@ def main() -> bool:
     # Dataene gemmes i InterTable-format
     staff = csv.intertable("staff", staff_data)
     stores = csv.intertable("stores", store_data)
-
-# Størrelsen af tabellerne med rådata
-    all_tables = (orders, order_items, customers, brands, categories, products, stock, staff, stores)
-    extract_sizes = {table.name: table.size for table in all_tables}
 
 ##########################
 ##### TRANSFORMATION #####
@@ -276,7 +272,9 @@ def main() -> bool:
     stock.refresh()
 
 # Størrelsen af tabellerne efter transformation
+    all_tables = (orders, order_items, customers, brands, categories, products, stock, staff, stores)
     transform_sizes = {table.name: table.size for table in all_tables}
+    print(transform_sizes)
 
 ###################
 ##### LOADING #####
@@ -302,11 +300,6 @@ def main() -> bool:
         for table in table_tuple:
             target_db.create(table)
             target_db.insert(table)
-    
-    # Viser størrelsesforskelle
-    print(extract_sizes)
-    print(transform_sizes)
-    print(DeepDiff(extract_sizes, transform_sizes))
 
     return True
 

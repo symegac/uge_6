@@ -42,8 +42,9 @@ def get_api_data(*paths: str, host: str = "127.0.0.1", port: str = "8000") -> di
             response_dict = json.loads(response.json())
             # target_db.create(','.join(table.columns), path[1:])
         except Exception as err:
-            print("Følgende fejl opstod:", err)
+            print("FEJL: Følgende fejl opstod:", err)
         else:
+            print(f"SUCCES: Hentede data fra API'en ved path '{path}'")
             raw_data[path[1:]] = response_dict
     return raw_data
 
