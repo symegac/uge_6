@@ -937,3 +937,31 @@ Mange af `varchar`-længderne forklares [her](#kommentarer-2).
 
 ### Loading
 Da vi på kurset har arbejdet med MySQL, er det kun naturligt, at den samlede data lagres i sådan en databse.
+
+#### Relationer
+Når tabellerne skal loades ind i databasen, er det vigtigt, at de loades i den rigtige rækkefølge, så relationerne mellem dem kan oprettes.
+Dette gøres ud fra foreign keys. Herigennem kan man se, hvilke data der er afhængige af værdier i en anden tabel
+
+##### Afhængigheder
+* stores > staff
+* orders products > order_items
+* customers stores staff > orders
+* brands categories > products
+* products > stock
+
+#### Fremgangsmåde
+Først loades tabellerne uden foreign keys.
+Herefter tabellerne, der refererer til disse (1.-leds foreign keys).
+Så kommer tabellerne, der refererer til tabeller med 1.-leds foreign keys (2.-leds foreign keys).
+Til sidst tabellerne, der refererer til dem med 2.-leds foreign keys (3.-leds foreign keys).
+
+| 0 foreign keys | 1. led | 2. led | 3. led |
+|:-----:|:-----:|:-----:|:-----:|
+| *brands, categories, customers, stores* | *staff* | *orders, products* | *order_items, stock* |
+
+
+##### Ændringer
+Ændrede `products.product_name)` til `varchar(80)`, fordi det længste produktnavn var på 53 tegn.
+
+`product_id` 13 og 21 har samme `product_name`, dette er mere kompliceret at rette pga. foreign keys til tabellen.
+Derfor fjerner jeg `unique` fra `product_name`.
