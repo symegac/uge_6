@@ -1,7 +1,5 @@
 import getpass
 import typing
-import datetime
-import decimal
 from . import util
 from . import connector
 from intertable import *
@@ -215,11 +213,7 @@ class Database(connector.DatabaseConnector):
         if self._execute(database_query, db=False):
             print(f"SUCCES: Databasen '{database_name}' blev oprettet.")
 
-    def create(self,
-        columns: list[DataField],
-        table_name: TableName,
-        # keys: Keys = {},
-    ) -> None:
+    def create(self, table: InterTable) -> None:
         """
         Opretter en ny tabel ud fra de angivne oplysninger.
 
@@ -232,18 +226,26 @@ class Database(connector.DatabaseConnector):
         :param foreign_key: _description_, defaults to {}
         :type foreign_key: dict, optional
         """
+        table_name = table.name
+        columns = table.header
+        keys = table.keys
+
         create_query = f"CREATE TABLE `{table_name}` ("
-        
+
         column_queries = []
+        column_params = {}
 
         for column in columns:
-            column_query = f"`{column.name}` {column.datatype}"
-            if not column.nullable:
+            field = columns[column]
+            column_query = f"`{field.name}` {field.datatype}"
+            if not field.nullable:
                 column_query += " NOT NULL"
-            if column.default is not None:
-                column_query += f" DEFAULT {column.default}"
-            if column.extra:
-                column_query += ' ' + column.extra
+            # TODO: Fiks default-værdier (1067 (42000): Invalid default value for 'col')
+            if field.default is not None:
+                column_query += f" DEFAULT %(" + field.name + "_default)s"
+                column_params.update({f"{field.name}_default": field.default})
+            if field.extra:
+                column_query += ' ' + field.extra
             column_queries.append(column_query)
             # if "id" in column:
             #     create_query += "INTEGER NOT NULL"
@@ -263,31 +265,44 @@ class Database(connector.DatabaseConnector):
             #     create_query += "DECIMAL(3,2) NOT NULL"
             # else:
             #     create_query += "VARCHAR(80) NOT NULL"
-        create_query += ", ".join(column_queries) + ')'
+        create_query += ", ".join(column_queries)
+
+        if keys is not None:
+            create_query += f", {self._create_keys(keys, table_name)}"
+
+        create_query += ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci'
 
         self._preview(create_query)
 
-        if self._execute(create_query):
+        if self._execute(create_query, column_params):
             print(f"SUCCES: Oprettede tabellen '{table_name}'.")
 
-        # if primary_key:
-        #     self.primary_key(table_name, primary_key)
-        #     self.add_key(table_name, unique_key)
-        # if foreign_key:
-        #     self.foreign_key(table_name, foreign_key)
-        #     # self.add_key(table_name, foreign_key)
-        # if unique_key:
-        #     self.add_key(table_name, unique_key)
+    def _create_keys(self, keys: Keys, table_name: TableName) -> str:
+        keylist = []
+        if primary := keys.primary:
+            if isinstance(primary, list):
+                # TODO: Kan kun have to kolonner som multikey lige nu
+                primary_key = f"CONSTRAINT PK_{primary[0]}_{primary[1]} PRIMARY KEY (`{primary[0]}`,`{primary[1]}`)"
+            else:
+                primary_key = f"PRIMARY KEY (`{primary}`)"
+            keylist.append(primary_key)
+        if foreign := keys.foreign:
+            fklist = [f"CONSTRAINT FK_{table_name}_{key}_{foreign[key][0]}_{foreign[key][1]} FOREIGN KEY (`{key}`) REFERENCES `{foreign[key][0]}`(`{foreign[key][1]}`)" for key in foreign]
+            keylist.extend(fklist)
+        if unique := keys.unique:
+            if isinstance(unique, list):
+                # TODO: Kan kun have to kolonner som multikey lige nu
+                unique_key = f"CONSTRAINT UC_{unique[0]}_{unique[1]} UNIQUE (`{unique[0]}`,`{unique[1]}`)"
+            else:
+                unique_key = f"UNIQUE (`{unique}`)"
+            keylist.append(unique_key)
+        return ", ".join(keylist)
 
-    # TODO: Forsøg at matche kolonnenavne fra dataens header med kolonnenavne fra den valgte tabel
     # TODO: Implementér et system til at skippe eller overwrite, hvis et felt i en række i datasættet
     # har samme værdi som ditto i tabellen. Hvis altså kolonnen har PRIMARY KEY eller UNIQUE som constraint.
-    def insert(self,
-        data: list[str], # TableData
-        table_name: TableName,
-        header: bool = True
-        # header: TableHeader
-    ) -> None:
+
+    # None eller ikke-eksisterende keys -> default value hvis DEFAULT -> NULL hvis nullable -> fejl
+    def insert(self, data: InterTable) -> None:
         """
         Indsætter en eller flere rækker data i en tabel.
 
@@ -306,67 +321,28 @@ class Database(connector.DatabaseConnector):
         :return: Hvis tabellen ikke findes, eller hvis dataene ikke har samme antal kolonner som tabellen.
         :rtype: None
         """
-        # Benyttes ikke endnu, men kan bruges til at bytte rundt på kolonner,
-        # hvis de står i en anden rækkefølge end tabellen, som dataene skal indsættes i
-        if header:
-            columns = data[0].strip('\n').split(',')
-        # Springer over header
-        rows = data[1:] if header else data
-        # Opdeler hver række i felter
-        rows = [row.strip('\n').split(',') for row in rows]
-
-        # Henter info om tabellen
-        if not (table_info := self.info(table_name)):
-            return
-        # Tjekker om alle rækker i den inputtede dataliste har samme antal felter, som der er kolonner i den angivne tabel,
-        # dvs. om længden af hver række (list[str]) er den samme som længden af headerinfoen (list[tuple])
-        if not all(len(row) == len(table_info) for row in iter(rows)):
-            self._error("En eller flere rækker data er uforenelig med tabellens format.")
-            return
+        table_name = data.name
+        header = data.header
 
         # Danner query
         insert_query = f"INSERT INTO `{table_name}` ("
         # Kolonnenavne (med backticks, fordi navnene er taget fra tabellen)
-        insert_query += ", ".join([f"`{column[0]}`" for column in table_info]) + ") VALUES ("
+        insert_query += ", ".join([f"`{header[column].name}`" for column in header]) + ") VALUES ("
         # Kolonneværdier (med %()s, fordi det er værdier oplyst af brugeren, der skal tjekkes)
-        insert_query += ", ".join([f"%({column[0]})s" for column in table_info]) + ')'
+        insert_query += ", ".join([f"%({header[column].name})s" for column in header]) + ')'
 
         # Danner dict over parametre til indsættelse af data
-        insert_params = []
-        for row in rows:
-            # Konverterer str til passende datatype
-            # Koverteringen lader til at være spild af tid,
-            # da værdiene også omdannes til de rette typer,
-            # hvis man bare indsætter tekst...
-            # for index, column in enumerate(table_info):
-                # insert_param[column[0]] = row[index]
-                # Kun de to første værdier (navn og type) tages fra kolonneinfoen
-                # column_name, column_type, *_ = column
-                # if "int" in column_type:
-                #     value = int(row[index])
-                # elif "datetime" in column_type:
-                #     value = datetime.datetime.fromisoformat(row[index])
-                # # Dækker char, varchar, text og [adj.]text
-                # elif "char" in column_type or "text" in column_type:
-                #     value = row[index]
-                # elif "float" in column_type:
-                #     value = float(row[index])
-                # elif "decimal" in column_type:
-                #     value = decimal.Decimal(row[index])
-                # insert_param[column_name] = value
-            # Ny, forenklet måde
-            insert_param = {column[0]: row[index] for index, column in enumerate(table_info)}
-            insert_params.append(insert_param)
+        insert_params = data.data
 
         self._preview(insert_query)
 
         if self._execute(insert_query, insert_params):
-            print(f"SUCCES: Data indsat i tabellen '{table_name}'.")
+            print(f"SUCCES: DataList indsat i tabellen '{table_name}'.")
 
     def new_table(self,
-            data: list[str], # TableData
+            data: list[str], # DataList
             table_name: TableName = "table",
-            header: str = '' # TableHeader
+            header: str = '' # Header
         ) -> None:
         """
         Opretter en ny tabel og indsætter data i den.
@@ -411,7 +387,7 @@ class Database(connector.DatabaseConnector):
         limit: int = 0,
         offset: int = 0,
         **kwargs
-    ) -> TableData | None:
+    ) -> DataList | None:
         """
         Læser data fra en tabel.
 
@@ -523,6 +499,7 @@ class Database(connector.DatabaseConnector):
     def _where_type(self, key: str, value: tuple, where_count: int) -> tuple[str, dict]:
         kwarg_query = f" `{value[0]}`"
         kwarg_params = {}
+        # TODO: DRY
         # WHERE column_name LIKE val
         if key.lower().startswith(("like", "lk")):
             name = f"like_{where_count}"
@@ -728,33 +705,35 @@ class Database(connector.DatabaseConnector):
                 print(f"SUCCES: Hentede info om databasen '{self.database}'.")
         return table_info
 
-    def get_header(self, table: TableName | DataField) -> TableHeader:
+    def get_header(self, table: TableName | DataField) -> Header:
         header = {}
         if isinstance(table, str):
             table = self.info(table)
         for column_info in table:
-            header[column_info[0]] = {
-                "type": column_info[1],
+            info = {
+                "name": column_info[0],
+                "datatype": column_info[1],
                 "nullable": True if column_info[2] == "YES" else False,
-                #"key": ,
+                #"key"
                 "default": column_info[4],
                 "extra": column_info[5]
             }
+            header[info["name"]] = DataField(**info)
         return header
 
-    def _find_constraints(self, table: TableName | DataField, primary: bool = True) -> ColumnName | ConstraintList:
+    def _find_constraints(self, table: TableName | DataField, primary: bool = True) -> ColumnName | list[ColumnName]:
         if isinstance(table, str):
             table = self.info(table)
         keys = [column_info[0] for column_info in table if column_info[3] == ("PRI" if primary else "UNI")]
         return keys[0] if len(keys) == 1 else keys
 
-    def primary_keys(self, table: TableName | DataField) -> ColumnName | ConstraintList:
+    def get_primary_keys(self, table: TableName | DataField) -> ColumnName | list[ColumnName]:
         return self._find_constraints(table, True)
 
-    def unique_keys(self, table: TableName | DataField) -> ColumnName | ConstraintList:
+    def get_unique_keys(self, table: TableName | DataField) -> ColumnName | list[ColumnName]:
         return self._find_constraints(table, False)
 
-    def foreign_keys(self, table_name: TableName) -> ForeignKeys:
+    def get_foreign_keys(self, table_name: TableName) -> ForeignKeys:
         # primary_keys = []
         foreign_keys = {}
 
@@ -770,9 +749,6 @@ class Database(connector.DatabaseConnector):
             eq2=("TABLE_NAME", table_name)
         )
         for constraint in constraints:
-            # Finder primary key(s)
-            # if constraint["CONSTRAINT_NAME"] == "PRIMARY":
-            #     primary_keys.append(constraint["COLUMN_NAME"])
             # Finder foreign keys
             if constraint["REFERENCED_TABLE_NAME"] is not None:
                 foreign_keys[constraint["COLUMN_NAME"]] = (
@@ -788,9 +764,9 @@ class Database(connector.DatabaseConnector):
             table_info = self.info(table_name)
 
         # Finder de forskellige typer keys
-        foreign_keys = self.foreign_keys(table_name)
-        primary_keys = self.primary_keys(table_info)
-        unique_keys = self.unique_keys(table_info)
+        foreign_keys = self.get_foreign_keys(table_name)
+        primary_keys = self.get_primary_keys(table_info)
+        unique_keys = self.get_unique_keys(table_info)
         # Hvis der er én primary key, sættes den på for sig selv
         # Hvis der er en multicol pk, sættes hele listen på
         if primary_keys:
@@ -804,18 +780,19 @@ class Database(connector.DatabaseConnector):
 
         return keys
 
-    def get_table(self, table_name: TableName) -> Table:
+    def get_table(self, table_name: TableName, new_name: TableName = '', *args, **kwargs) -> InterTable:
         # Finder grundlæggende info
         table_info = self.info(table_name)
 
-        # Indsætter tabelnavn
-        table = {"name": table_name}
-        # Indsætter header
-        table["header"] = self.get_header(table_info)
-        # Indsætter primary, foreign og unique keys
-        table["keys"] = self.get_keys(table_name, table_info)
-        # Indsætter data
-        table["data"] = self.read(table_name)
+        # Finder header
+        header = self.get_header(table_info)
+        # Finder primary, foreign og unique keys
+        keys = self.get_keys(table_name, table_info)
+        # Finder data
+        data = self.read(table_name, *args, **kwargs)
+
+        # Opretter InterTable
+        table = InterTable(new_name if new_name else table_name, header, keys, data)
 
         return table
 
@@ -842,27 +819,27 @@ class Database(connector.DatabaseConnector):
         # WHERE bruger self._where()
         pass
 
-    def add(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
-        # ALTER TABLE table_name ADD colum_name datatype
+    def add_column(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
+        # ALTER TABLE table_name ADD column_name datatype
         pass
 
-    def modify(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
+    def modify_column(self, table_name: TableName, column_name: ColumnName, datatype: str) -> None:
         # ALTER TABLE table_name MODIFY COLUMN column_name datatype
         pass
 
-    def primary_key(self, table_name: TableName, column_name: ColumnName) -> None:
+    def add_primary_key(self, table_name: TableName, column_name: ColumnName) -> None:
         alter_query = f"ALTER TABLE `{table_name}` ADD PRIMARY KEY (`{column_name}`)"
 
         self._preview(alter_query)
         if self._execute(alter_query):
             print(f"SUCCES: Tilføjede kolonnen '{column_name}' som primary key for tabellen '{table_name}'")
 
-    def foreign_key(self, table_name: TableName, foreign_key: dict[str, str]) -> None: # dict[ColumnName, tuple[TableName, ColumnName]]
+    def add_foreign_keys(self, table_name: TableName, foreign_key: dict[str, tuple[str, str]]) -> None:
         alter_queries = []
         for key in foreign_key:
-            split_key = foreign_key[key].split('.')
+            reference = foreign_key[key]
             alter_query = f"ALTER TABLE `{table_name}` "
-            alter_query += f"ADD FOREIGN KEY (`{key}`) REFERENCES `{split_key[0]}`(`{split_key[1]}`)"
+            alter_query += f"ADD FOREIGN KEY (`{key}`) REFERENCES `{reference[0]}`(`{reference[1]}`)"
             alter_queries.append(alter_query)
 
         for query in alter_queries:

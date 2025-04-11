@@ -124,7 +124,7 @@ class DatabaseConnector:
 
         try:
             # Dict udpakkes og bruges som keyword-parametre i oprettelse af forbindelsen
-            connection = mysql.connector.connect(**login_params)
+            connection = mysql.connector.connect(**login_params, connect_timeout=5)
         except Exception as err:
             self._error("Kunne ikke oprette forbindelsen.", err)
             return False

@@ -9,7 +9,7 @@ def get_api_paths(host: str = "127.0.0.1", port: str = "8000") -> list[str]:
     """
     try:
         # Henter API-info som JSON
-        schema = requests.get(f"http://{host}:{port}/openapi.json").json()
+        schema: dict[str, dict[str, dict]] = requests.get(f"http://{host}:{port}/openapi.json").json()
     except Exception as err:
         print("Følgende fejl opstod:", err)
     else:
@@ -52,10 +52,12 @@ def get_columns(row: dict[str, typing.Any] | list[dict[str, typing.Any]]) -> tup
         row = row[0]
     return row.keys()
 
-def intertable(name: str, data: list[dict[str, typing.Any]], primary_key: str | list[str]) -> Table:
-    header = {column: STANDARD_FIELD for column in get_columns(data)}
+def intertable(name: str, data: list[dict[str, typing.Any]], primary_key: str | list[str] = '') -> InterTable:
+    header = {column: DataField(column, **STANDARD_FIELD) for column in get_columns(data)}
 
-    keys = Keys(primary_key, {"a": ("b", "c")})
+    keys = Keys()
+    if primary_key:
+        keys.primary = primary_key
 
     return InterTable(name, header, keys, data)
 
@@ -65,11 +67,12 @@ if __name__ == "__main__":
         "/orders",
         "/order_items",
         "/customers",
-        host=API.host,
+        host=API.localhost,
         port=API.port
     )
     orders = intertable("orders", api_data["orders"], "order_id")
     order_items = intertable("order_items", api_data["order_items"], ["order_id", "item_id"])
     customers = intertable("customers", api_data["customers"], "customer_id")
 
-    print(orders.keys, order_items.keys, customers.keys)
+    print(orders.keys, orders.header, order_items.keys, customers.keys)
+    print(orders)

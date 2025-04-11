@@ -45,10 +45,10 @@ def get_name(path: str) -> str:
     """
     return os.path.splitext(os.path.basename(path))[0]
 
-def csv_to_intertable(name: str, raw_data: list[str]) -> InterTable:
+def intertable(name: str, raw_data: list[str]) -> InterTable:
     columns, *rows = raw_data
 
-    header = {column: STANDARD_FIELD for column in columns.strip('\n').split(',')}
+    header = {column: DataField(column, **STANDARD_FIELD) for column in columns.strip('\n').split(',')}
 
     data = [dict(zip(header.keys(), row.strip('\n').split(','))) for row in rows]
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     import os.path
     sta = os.path.join("data_csv", "staffs.csv")
     sto = os.path.join("data_csv", "stores.csv")
-    staffs = csv_to_intertable(get_name(sta), read_csv("staffs.csv", "data_csv"))
-    stores = csv_to_intertable(get_name(sto), read_csv("stores.csv", "data_csv"))
+    staffs = intertable(get_name(sta), read_csv("staffs.csv", "data_csv"))
+    stores = intertable(get_name(sto), read_csv("stores.csv", "data_csv"))
     print(staffs)
     print(stores)
