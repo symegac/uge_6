@@ -1,6 +1,5 @@
 import api
 import csvr as csv
-from deepdiff import DeepDiff
 from db.database import Database
 from intertable import *
 from config import API, DB, CSV
@@ -108,7 +107,7 @@ def main() -> bool:
         "item_id": DataField("item_id", "tinyint unsigned", False),
         "product_id": DataField("product_id", "mediumint unsigned", False),
         "quantity": DataField("quantity", "smallint unsigned", False),
-        "list_price": DataField("list_price", "decimal(8,2)", False),
+        "list_price": DataField("list_price", "decimal(10,2)", False),
         "discount": DataField("discount", "decimal(3,2)", False, default=Decimal(0.00)),
     }
 
@@ -233,7 +232,7 @@ def main() -> bool:
         "brand_id": DataField("brand_id", "smallint unsigned", False),
         "category_id": DataField("category_id", "smallint unsigned", False),
         "model_year": DataField("model_year", "year", False),
-        "list_price": DataField("list_price", "decimal(8,2)", False)
+        "list_price": DataField("list_price", "decimal(10,2)", False)
     }
 
     # Tilføjer keys
@@ -282,7 +281,7 @@ def main() -> bool:
     # Opretter et nyt database-objekt
     target_db = Database(
         DB.localusername, DB.localpassword,
-        "bikeshopdb",
+        "bikecorpdb",
         DB.localhost, DB.port,
         preview=False
     )
