@@ -1,9 +1,9 @@
 import getpass
 import typing
-from . import connector
+from .connector import DatabaseConnector
 from intertable import *
 
-class Database(connector.DatabaseConnector):
+class Database(DatabaseConnector):
     """
     Et objekt, der er forbundet til en MySQL-instans og som regel en database heri,
     og som kan interagere med databasen og tabellerne, som den indeholder.
@@ -313,7 +313,8 @@ class Database(connector.DatabaseConnector):
         # Kolonneværdier (med %()s, fordi det er værdier oplyst af brugeren, der skal tjekkes)
         insert_query += ", ".join([f"%({header[column].name})s" for column in header]) + ')'
 
-        # Danner dict over parametre til indsættelse af data
+        # Danner liste af dicts over parametre til indsættelse af data
+        # mysql.connector kan 
         insert_params = list(data.data)
 
         self._preview(insert_query)
@@ -627,7 +628,7 @@ class Database(connector.DatabaseConnector):
 
         return join_query
 
-    def info(self, table_name: TableName = '') -> DataField | tuple[TableName] | bool:
+    def info(self, table_name: TableName = '') -> TableInfo | tuple[TableName] | bool:
         """
         Henter info om databasens eller en tabels opbygning.
 
@@ -638,9 +639,9 @@ class Database(connector.DatabaseConnector):
 
         :return: En liste indeholdende en tuple med info for hver kolonne i tabellen.
             Tuplen indeholder navn, datatype, nullability, nøgletype, standardværdi og .
-        :rtype: list[tuple[str, str, str, str, typing.Any, str]]
+        :rtype: TableInfo
         :return: En liste indeholdende info om hver tabel i databasen, herunder navn.
-        :rtype: list[tuple[str]]
+        :rtype: tuple[str]
         :return: Hvis READ-operationen ikke kunne gennemføres.
             Enten fordi der ikke er nogen forbindelse til en database,
             eller forbi tabellen eller databasen ikke eksisterer.
@@ -662,8 +663,8 @@ class Database(connector.DatabaseConnector):
                 print(f"SUCCES: Hentede info om databasen '{self.database}'.")
         return table_info
 
-    def get_header(self, table: TableName | DataField) -> Header:
-        header = {}
+    def get_header(self, table: TableName | dict[str, typing.Any]) -> Header:
+        header = Header()
         if isinstance(table, str):
             table = self.info(table)
         for column_info in table:
@@ -678,20 +679,19 @@ class Database(connector.DatabaseConnector):
             header[info["name"]] = DataField(**info)
         return header
 
-    def _find_constraints(self, table: TableName | DataField, primary: bool = True) -> ColumnName | list[ColumnName]:
+    def _find_constraints(self, table: TableName | dict[str, typing.Any], primary: bool = True) -> ColumnName | list[ColumnName]:
         if isinstance(table, str):
             table = self.info(table)
         keys = [column_info[0] for column_info in table if column_info[3] == ("PRI" if primary else "UNI")]
         return keys[0] if len(keys) == 1 else keys
 
-    def get_primary_keys(self, table: TableName | DataField) -> ColumnName | list[ColumnName]:
-        return self._find_constraints(table, True)
+    def get_primary_keys(self, table: TableName | TableInfo) -> ColumnName | list[ColumnName]:
+        return self._find_constraints(table, primary=True)
 
-    def get_unique_keys(self, table: TableName | DataField) -> ColumnName | list[ColumnName]:
-        return self._find_constraints(table, False)
+    def get_unique_keys(self, table: TableName | TableInfo) -> ColumnName | list[ColumnName]:
+        return self._find_constraints(table, primary=False)
 
     def get_foreign_keys(self, table_name: TableName) -> ForeignKeys:
-        # primary_keys = []
         foreign_keys = {}
 
         # Læser info om databasen
@@ -715,7 +715,7 @@ class Database(connector.DatabaseConnector):
 
         return foreign_keys
 
-    def get_keys(self, table_name: TableName, table_info: DataField = []) -> Keys:
+    def get_keys(self, table_name: TableName, table_info: TableInfo = []) -> Keys:
         keys = Keys()
         if not table_info:
             table_info = self.info(table_name)

@@ -3,7 +3,7 @@ from db.database import Database
 from config import *
 
 def main() -> None:
-    db = Database(DB.username, DB.password, "northwind")
+    db = Database(DB.localusername, DB.localpassword, "northwind")
     very_specific_query = db.read(
         "employees",
         "EmployeeID", "TitleOfCourtesy", "FirstName", "LastName", "Title", "BirthDate", "Country",

@@ -2,7 +2,6 @@ import re
 import typing
 from decimal import Decimal
 from datetime import date, datetime, time
-from collections import deque
 from copy import deepcopy
 
 Parameter = typing.NewType("Parameter", dict[str, typing.Any])
@@ -15,10 +14,20 @@ ColumnName = typing.NewType("ColumnName", str)
 :param ColumnName:
 :type ColumnName: str
 """
+TableInfo = typing.NewType("TableInfo", list[tuple[ColumnName, str, str, str, typing.Any, str]])
+"""
+:param TableInfo:
+:type TableInfo: list[tuple[ColumnName, str, str, str, typing.Any, str]]
+"""
 DataEntry = typing.NewType("DataEntry", dict[ColumnName, typing.Any])
 """
 :param DataEntry:
 :type DataEntry: dict[str, typing.Any]
+"""
+DataList = typing.NewType("DataList", list[DataEntry])
+"""
+:param DataList:
+:type DataList: list[DataEntry]
 """
 TableName = typing.NewType("TableName", str)
 """
@@ -29,11 +38,6 @@ ForeignKeys = typing.NewType("ForeignKeys", dict[ColumnName, tuple[TableName, Co
 """
 :param ForeignKeys:
 :type ForeignKeys: dict[ColumnName, tuple[TableName, ColumnName]]
-"""
-DataList = typing.NewType("DataList", deque[DataEntry])
-"""
-:param DataList:
-:type DataList: deque[DataEntry]
 """
 
     # BINARIES
@@ -86,7 +90,7 @@ class Keys:
         if self.unique:
             repr_strings.append(f"{self.unique=}"[5:])
 
-        return f"Keys({",\n     ".join(repr_strings)})"
+        return f"Keys({", ".join(repr_strings)})"
 
     def __eq__(self, other: typing.Self | dict[str, typing.Any]) -> bool:
         return self.all == other
@@ -102,7 +106,8 @@ class Keys:
         if fk or not isinstance(key, list):
             key = [key]
         for k in key:
-            if ';' in key or '%' in key or '`' in key or "--" in key:
+            # Udelukker farlige tegn(sekvenser) som ; % ` -- .
+            if re.search("[^A-z_]", k) is not None:
                 raise ValueError("Ulovligt input.")
 
     @property
@@ -116,7 +121,7 @@ class Keys:
         try:
             self._check_key(key)
         except Exception as err:
-            print(f"Ugyldig nøgle {key}. {err}")
+            print(f"Ugyldig nøgle '{key}'. {err}")
         else:
             self._primary = key
 
@@ -133,27 +138,27 @@ class Keys:
     @foreign.setter
     def foreign(self, key: dict[str, tuple[str, str]]):
         if not isinstance(key, dict):
-            print(f"Ugyldig nøgle {key}. Nøglen skal være en dict.")
+            print(f"Ugyldig nøgle '{key}'. Nøglen skal være en dict.")
             return
         for k in key:
             try:
                 self._check_key(k, fk=True)
             except Exception as err:
-                print(f"Ugyldig nøgle {key}. {err}")
+                print(f"Ugyldig nøgle '{key}'. {err}")
                 continue
             ref = key[k]
             if not isinstance(ref, tuple):
-                print(f"Ugyldig nøgle {key}. Referencen skal være en tuple.")
+                print(f"Ugyldig nøgle '{key}'. Referencen skal være en tuple.")
                 continue
             if len(ref) != 2:
-                print(f"Ugyldig nøgle {key}. Referencen må ikke indeholde mere eller mindre end to elementer: Et tabelnavn og et kolonnenavn.")
+                print(f"Ugyldig nøgle '{key}'. Referencen må ikke indeholde mere eller mindre end to elementer: Et tabelnavn og et kolonnenavn.")
                 continue
             for r in ref:
                 if not isinstance(r, str):
-                    print(f"Ugyldig nøgle {key}. Referencen må kun indeholde tekststrenge.")
+                    print(f"Ugyldig nøgle '{key}'. Referencen må kun indeholde tekststrenge.")
                     break
                 if not r:
-                    print(f"Ugyldig nøgle {key}. Referencen må ikke indeholde tomme tekststrenge.")
+                    print(f"Ugyldig nøgle '{key}'. Referencen må ikke indeholde tomme tekststrenge.")
                     break
             else:
                 self._foreign.update(key)
@@ -164,7 +169,7 @@ class Keys:
 
     @property
     def unique(self):
-        if self._unique is None or not self._unique:
+        if not self._unique:
             return None
         return self._unique
 
@@ -173,7 +178,7 @@ class Keys:
         try:
             self._check_key(key)
         except Exception as err:
-            print(f"Ugyldig nøgle {key}. {err}")
+            print(f"Ugyldig nøgle '{key}'. {err}")
         else:
             self._unique = key
 
@@ -216,31 +221,38 @@ class DataField:
         if extra:
             self.extra = extra
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.name) and bool(self.datatype)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        if not self.name or not self.datatype:
+            return None
+        col = {"name": self.name, **self._unpack(full=False)}
+        return f"DataField({", ".join([f"{k}={f"{v=}"[2:]}" for k, v in col.items()])})"
+
+    def __str__(self) -> str:
         if not self.name or not self.datatype:
             return None
         col = self._unpack(full=False)
-        return repr(col)
+        return str(col)
 
     def _unpack(self, full: bool = False) -> dict[str, typing.Any]:
         col = {
             "datatype": self.datatype,
-            "nullable": self.nullable
         }
-        if full or self._default is not None:
+        if full or not self._nullable:
+            col["nullable"] = self.nullable
+        if full or self.default is not None:
             col["default"] = self.default
         if full or self.extra:
             col["extra"] = self.extra
         return col
 
     def _is_valid_string(self, name: str) -> bool:
-        if not name or name is None:
+        if not name:
             return False
         # Tjekker om forbudte tegn er i tekststrengen
-        if any([';' in name, '%' in name, '`' in name, '.' in name, "--" in name]):
+        if re.search("[^A-z_]", name) is not None:
             return False
         return True
 
@@ -291,7 +303,7 @@ class DataField:
             return self._datatype
         else:
             return "varchar(255)"
-    
+
     @datatype.setter
     def datatype(self, input_datatype: str):
         if self._is_valid_datatype(input_datatype):
@@ -335,7 +347,7 @@ class DataField:
     @property
     def extra(self):
         return self._extra
-    
+
     @extra.setter
     def extra(self, ex: str):
         if self.default is not None:
@@ -348,33 +360,41 @@ class DataField:
     def extra(self):
         self.extra = ''
 
-Header = typing.NewType("Header", dict[ColumnName, DataField])
-"""
-:param Header:
-:type Header: dict[ColumnName, DataField]
-"""
+class Header(dict[str, DataField]):
+    def __repr__(self) -> str:
+        return f"Header({super().__repr__()})"
+
+    def __str__(self) -> str:
+        return f"{{{", ".join([f"'{k}': {v}" for k, v in self.items()])}}}"
 
 class InterTable:
     def __init__(self,
         name: TableName,
         header: Header,
         keys: Keys = Keys(),
-        data: DataList = deque()
+        data: DataList = []
     ):
         self.name: TableName = name
         self.header: Header = header
         self.keys: Keys = keys
-        self.data: DataList = deque()
+        self.data: DataList = []
         for entry in data:
             self.__iadd__(entry)
 
-    def __repr__(self) -> dict[str, TableName | Header | Keys | DataList]:
-        return repr({"name": self.name, "header": self.header, "keys": self.keys.all, "data": self.data})
+    def __repr__(self) -> str:
+        return f"InterTable(name={repr(self.name)}, header={repr(self.header)}, keys={repr(self.keys)}, data={repr(self.data)})"
+
+    def __str__(self) -> str:
+        name = f"'name': '{self.name}'"
+        header = f"'header': {self.header}"
+        keys = f"'keys': {self.keys}"
+        data = f"'data': {self.data}"
+        return f"{{{", ".join((name, header, keys, data))}}}"
 
     def __enter__(self) -> typing.Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(self, tp, val, tb) -> None:
         self.refresh()
 
     def __len__(self) -> int:
@@ -398,7 +418,7 @@ class InterTable:
 
         :rtype: tuple[int, int]
         """
-        return (self.width, len(self.data))
+        return (self.width, self.length)
 
     def __iter__(self) -> typing.Iterator:
         # Der itereres altid over DataList
@@ -573,29 +593,20 @@ class InterTable:
 
     def remove_row(self, rows: int | slice | typing.Iterable[int]) -> None:
         # Hvis et heltal bruges, fjernes kun den ene række med det id
-        # Hvis id'et er i en af enderne, poppes der
         if isinstance(rows, int):
-            if rows == 0:
-                self.pop(1, left=True)
-                return
-            elif rows == len(self.data) - 1:
-                self.pop(1, left=False)
-                return
-            else:
-                remove = (rows,)
+            self.data.pop(rows)
+            return
         # Hvis slicing bruges, fjernes rækker med id, der omfattes af slicet
-        # TODO: Lav pop hvis slice-step er None og slice-start er 0 eller slice-stop er max?
-        # Er det bedre performance end deque(comprehension)?
         elif isinstance(rows, slice):
             remove = range(len(self.data))[rows]
         # Hvis en liste, tuple eller anden iterable bruges, fjernes alle rækker med id i denne
         elif isinstance(rows, typing.Iterable):
             remove = rows
 
-        self.data = deque(row for index, row in enumerate(self.data) if index not in remove)
+        self.data = [row for index, row in enumerate(self.data) if index not in remove]
 
-    def pop(self, times: int = 1, left: bool = False) -> DataEntry | DataList:
-        popped = [self.data.popleft() if left else self.data.pop() for time in range(times)]
+    def pop(self, times: int = 1) -> DataEntry | DataList:
+        popped = [self.data.pop() for time in range(times)]
         return popped if len(popped) > 1 else popped[0]
 
     def remove_column(self, *columns: str) -> None:
@@ -606,18 +617,21 @@ class InterTable:
                 self.header.pop(column)
             # KEYS
             # Hvis kolonnen var del af primary key, fjernes primary key
-            if self.keys.primary is not None:
-                if self.keys.primary == column or column in self.keys.primary:
+            primary = self.keys.primary
+            if primary is not None:
+                if primary == column or column in primary:
                     del self.keys.primary
             # Hvis kolonnen var en foreign key, fjernes denne foreign key
-            if self.keys.foreign is not None:
-                if column in self.keys.foreign:
+            foreign = self.keys.foreign
+            if foreign is not None:
+                if column in foreign:
                     self.keys.foreign.pop(column)
             # Hvis kolonnen var del af en unique key, fjernes denne unique key
-            if self.keys.unique is not None:
-                if self.keys.unique == column:
+            unique = self.keys.unique
+            if unique is not None:
+                if unique == column:
                     del self.keys.unique
-                elif column in self.keys.unique:
+                elif column in unique:
                     self.keys.unique.remove(column)
                     # Hvis der kun er en unique key tilbage,
                     # føres denne ud af listen for at stå selv

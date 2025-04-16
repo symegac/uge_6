@@ -19,7 +19,7 @@ def get_api_paths(host: str = "127.0.0.1", port: str = "8000") -> list[str]:
             return [path for path in paths if paths[path].get("get", False)]
         return []
 
-def get_api_data(*paths: str, host: str = "127.0.0.1", port: str = "8000") -> dict[str, list[dict[str, typing.Any]]]:
+def get_api_data(*paths: str, host: str = "127.0.0.1", port: str = "8000") -> dict[str, list[dict[str, typing.Any]]] | list[dict[str, typing.Any]]:
     """
     Henter data fra en API ud fra en eller flere angivne paths, samt en serveradresse.
 
@@ -30,8 +30,9 @@ def get_api_data(*paths: str, host: str = "127.0.0.1", port: str = "8000") -> di
     :param port: Porten, der skal tilgås på adressen.
         *Upåkrævet*. Standardværdi: `"8000"`
     :type port: str, optional
-    :return: En dict indeholdende de fundne datasæt, hver som en dict med en header- og data-del.
-    :rtype: dict[str, dict[str, list[dict[str, Any]]]]
+    :return: En dict indeholdende de fundne datasæt, hver som en liste med en header- og data-del.
+        Eller blot et enkelt datasæt.
+    :rtype: dict[str, list[dict[str, typing.Any]]] | list[dict[str, typing.Any]]
     """
     raw_data = {}
     # Kører en request for hver path
@@ -40,27 +41,22 @@ def get_api_data(*paths: str, host: str = "127.0.0.1", port: str = "8000") -> di
             response = requests.get(f"http://{host}:{port}{path}")
             # Laver responsen om til en dict
             response_dict = json.loads(response.json())
-            # target_db.create(','.join(table.columns), path[1:])
         except Exception as err:
             print("FEJL: Følgende fejl opstod:", err)
         else:
             print(f"SUCCES: Hentede data fra API'en ved path '{path}'")
             raw_data[path[1:]] = response_dict
-    return raw_data
+    return raw_data if len(paths) != 1 else raw_data[paths[0][1:]]
 
 def get_columns(row: dict[str, typing.Any] | list[dict[str, typing.Any]]) -> tuple[str]:
     if isinstance(row, list):
         row = row[0]
     return row.keys()
 
-def intertable(name: str, data: list[dict[str, typing.Any]], primary_key: str | list[str] = '') -> InterTable:
+def intertable(name: str, data: list[dict[str, typing.Any]]) -> InterTable:
     header = {column: DataField(column, **STANDARD_FIELD) for column in get_columns(data)}
 
-    keys = Keys()
-    if primary_key:
-        keys.primary = primary_key
-
-    return InterTable(name, header, keys, data)
+    return InterTable(name, Header(header), Keys(), data)
 
 if __name__ == "__main__":
     from config import API
@@ -71,9 +67,9 @@ if __name__ == "__main__":
         host=API.localhost,
         port=API.port
     )
-    orders = intertable("orders", api_data["orders"], "order_id")
-    order_items = intertable("order_items", api_data["order_items"], ["order_id", "item_id"])
-    customers = intertable("customers", api_data["customers"], "customer_id")
+    orders = intertable("orders", api_data["orders"])
+    order_items = intertable("order_items", api_data["order_items"])
+    customers = intertable("customers", api_data["customers"])
 
     print(orders.keys, orders.header, order_items.keys, customers.keys)
     print(orders)

@@ -23,7 +23,7 @@ def read_csv(filename: str, data_dir: str = "data") -> list[str]:
     except FileNotFoundError:
         print(f"FEJL: Filen '{data_file}' eksisterer ikke.")
     except Exception as err:
-        print(f"FEJL: Kunne ikke læse filen '{filename}'. Følgende fejl opstod:\n    ", err)
+        print(f"FEJL: Kunne ikke læse filen '{filename}'. Følgende fejl opstod:\n    {err}")
     else:
         print(f"SUCCES: Indlæste filen '{filename}'.")
         return raw_data
@@ -52,7 +52,7 @@ def intertable(name: str, raw_data: list[str]) -> InterTable:
 
     data = [dict(zip(header.keys(), row.strip('\n').split(','))) for row in rows]
 
-    return InterTable(name, header, Keys(), data)
+    return InterTable(name, Header(header), Keys(), data)
 
 if __name__ == "__main__":
     import os.path

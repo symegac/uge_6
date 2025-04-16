@@ -53,10 +53,10 @@ def main() -> bool:
 ##########
     with brands:
         # Definerer header
-        brands.header = {
+        brands.header = Header({
             "brand_id": DataField("brand_id", "smallint unsigned", False, extra="auto"),
             "brand_name": DataField("brand_name", "varchar(40)", False)
-        }
+        })
 
         # Tilføjer keys
         brands.keys.primary = "brand_id"
@@ -65,10 +65,10 @@ def main() -> bool:
 ##############
     with categories:
         # Definerer header
-        categories.header = {
+        categories.header = Header({
             "category_id": DataField("category_id", "smallint unsigned", False, extra="auto"),
             "category_name": DataField("category_name", "varchar(40)", False)
-        }
+        })
 
         # Tilføjer keys
         categories.keys.primary = "category_id"
@@ -77,7 +77,7 @@ def main() -> bool:
 #############
     with customers:
         # Definerer header
-        customers.header = {
+        customers.header = Header({
             "customer_id": DataField("customer_id", "mediumint unsigned", False, extra="auto"),
             "first_name": DataField("first_name", "varchar(40)", False),
             "last_name": DataField("last_name", "varchar(40)", False),
@@ -87,7 +87,7 @@ def main() -> bool:
             "city": DataField("city", "varchar(40)", False),
             "state": DataField("state", "char(2)", False),
             "zip_code": DataField("zip_code", "mediumint unsigned", False),
-        }
+        })
 
         # Tilføjer keys
         customers.keys.primary = "customer_id"
@@ -97,7 +97,7 @@ def main() -> bool:
 ##########
     with stores:
         # Definerer header
-        stores.header = {
+        stores.header = Header({
             "name": DataField("name", "varchar(80)", False),
             "phone": DataField("phone", "char(14)", False),
             "email": DataField("email", "varchar(80)", False),
@@ -105,7 +105,7 @@ def main() -> bool:
             "city": DataField("city", "varchar(40)", False),
             "state": DataField("state", "char(2)", False),
             "zip_code": DataField("zip_code", "mediumint unsigned", False)
-        }
+        })
 
         # Indsætter ny autogenereret id-kolonne i starten af tabellen
         stores << DataField("store_id", "smallint unsigned", False, extra="auto")
@@ -117,7 +117,7 @@ def main() -> bool:
 #########
     with staff:
         # Definerer header
-        staff.header = {
+        staff.header = Header({
             "name": DataField("name", "varchar(40)", False),
             "last_name": DataField("last_name", "varchar(40)", False),
             "email": DataField("email", "varchar(80)", False),
@@ -126,7 +126,7 @@ def main() -> bool:
             "store_name": DataField("store_name", "text"),
             "street": DataField("street", "text"),
             "manager_id": DataField("manager_id", "smallint unsigned")
-        }
+        })
 
         # TODO: Indbyg forbindelsen i nedenstående funktion
         store_map = {entry["name"]: entry["store_id"] for entry in stores}
@@ -156,7 +156,7 @@ def main() -> bool:
 ##########
     with orders:
         # Definerer header
-        orders.header = {
+        orders.header = Header({
             "order_id": DataField("order_id", "mediumint unsigned", False, extra="auto"),
             "customer_id": DataField("customer_id", "mediumint unsigned", False),
             "order_status": DataField("order_status", "tinyint unsigned", False),
@@ -165,7 +165,7 @@ def main() -> bool:
             "shipped_date": DataField("shipped_date", "date"),
             "store": DataField("store", "text"),
             "staff_name": DataField("staff_name", "text")
-        }
+        })
 
         # TODO: Indbyg forbindelsen i nedenstående funktion
         staff_map = {entry["name"]: entry["staff_id"] for entry in staff}
@@ -193,14 +193,14 @@ def main() -> bool:
 ############
     with products:
         # Definerer header
-        products.header = {
+        products.header = Header({
             "product_id": DataField("product_id", "mediumint unsigned", False, extra="auto"),
             "product_name": DataField("product_name", "varchar(80)", False),
             "brand_id": DataField("brand_id", "smallint unsigned", False),
             "category_id": DataField("category_id", "smallint unsigned", False),
             "model_year": DataField("model_year", "year", False),
             "list_price": DataField("list_price", "decimal(10,2)", False)
-        }
+        })
 
         # Tilføjer keys
         products.keys.primary = "product_id"
@@ -214,14 +214,14 @@ def main() -> bool:
 ###############
     with order_items:
         # Definerer header
-        order_items.header = {
+        order_items.header = Header({
             "order_id": DataField("order_id", "mediumint unsigned", False),
             "item_id": DataField("item_id", "tinyint unsigned", False),
             "product_id": DataField("product_id", "mediumint unsigned", False),
             "quantity": DataField("quantity", "smallint unsigned", False),
             "list_price": DataField("list_price", "decimal(10,2)", False),
             "discount": DataField("discount", "decimal(3,2)", False, default=Decimal(0.00)),
-        }
+        })
 
         # Tilføjer keys
         order_items.keys.primary = ["order_id", "item_id"]
@@ -234,11 +234,11 @@ def main() -> bool:
 #########
     with stock:
         # Definerer header
-        stock.header = {
+        stock.header = Header({
             "store_name": DataField("store_name", "text"),
             "product_id": DataField("product_id", "mediumint unsigned", False),
             "quantity": DataField("quantity", "mediumint unsigned", False)
-        }
+        })
 
         # Indsætter ny kolonne med værdier ud fra forbindelse til anden tabel
         stock @ (DataField("store_id", "smallint unsigned", False), "store_name", store_map)
