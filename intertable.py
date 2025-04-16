@@ -430,31 +430,37 @@ class InterTable:
         elif isinstance(loc, slice):
             self.remove_row(loc)
 
-    def __add__(self, other: DataEntry | typing.Self) -> typing.Self:
+    def __add__(self, other: DataEntry | DataList | typing.Self) -> typing.Self:
         if isinstance(other, dict):
             if self._validate_entry(other, new=True):
                 copy = deepcopy(self)
                 copy.data.append(other)
                 return copy
-        elif isinstance(other, type(self)):
-            print("Joins er ikke implementeret endnu.")
-            return deepcopy(self)
+        elif isinstance(other, (list, type(self))):
+            for entry in other:
+                if not self._validate_entry(entry, new=True):
+                    break
+            else:
+                copy = deepcopy(self)
+                copy.data.extend(other)
+                return copy
 
-    def __iadd__(self, other: DataEntry | typing.Self) -> typing.Self:
+    def __iadd__(self, other: DataEntry | DataList | typing.Self) -> typing.Self:
         if isinstance(other, dict):
             if self._validate_entry(other, new=True):
                 self.data.append(other)
                 return self
-        elif isinstance(other, type(self)):
-            print("Joins er ikke implementeret endnu.")
-            return self
+        elif isinstance(other, (list, type(self))):
+            for entry in other:
+                if not self._validate_entry(entry, new=True):
+                    break
+            else:
+                self.data.extend(other)
+                return self
 
     def __lshift__(self, other: DataField) -> typing.Self:
-        if isinstance(other, DataField):
-            self.header = {other.name: other, **self.header}
-            for row, entry in enumerate(self.data):
-                self.data[row] = {other.name: row+1, **entry}
-            return self
+        self.auto_id(other, start=1)
+        return self
 
     def __matmul__(self, other: tuple[DataField, str, dict[typing.Any, typing.Any]]) -> typing.Self:
         column, reference, mapping = other
@@ -538,15 +544,6 @@ class InterTable:
                     raise ValueError(f"Der findes allerede en række med værdien ({col_name}={row_val}). Kolonnen '{col_name}' må kun indeholde unikke værdier.")
         return True
 
-    def pop(self, times: int = 1, left: bool = False) -> DataEntry:
-        popped = []
-        for time in range(times):
-            if left:
-                popped.append(self.data.popleft())
-            else:
-                popped.append(self.data.pop())
-        return popped
-
     def change_type(self, column: ColumnName, new_type: str) -> None:
         # Den nye datatype sættes
         col = self.header[column]
@@ -562,13 +559,38 @@ class InterTable:
         for col in self.header:
             self.change_type(col, self.header[col].datatype)
 
-    def remove_row(self, rows: int | slice) -> None:
+    def auto_id(self, column: DataField, start: int = 1) -> None:
+        if isinstance(column, DataField):
+            self.header = {column.name: column, **self.header}
+            for row, entry in enumerate(self.data):
+                self.data[row] = {column.name: row + start, **entry}
+
+    def remove_row(self, rows: int | slice | typing.Iterable[int]) -> None:
         # Hvis et heltal bruges, fjernes kun den ene række med det id
+        # Hvis id'et er i en af enderne, poppes der
         if isinstance(rows, int):
-            self.data = [row for index, row in enumerate(self.data) if index != rows]
+            if rows == 0:
+                self.pop(1, left=True)
+                return
+            elif rows == len(self.data) - 1:
+                self.pop(1, left=False)
+                return
+            else:
+                remove = (rows,)
         # Hvis slicing bruges, fjernes rækker med id, der omfattes af slicet
+        # TODO: Lav pop hvis slice-step er None og slice-start er 0 eller slice-stop er max?
+        # Er det bedre performance end deque(comprehension)?
         elif isinstance(rows, slice):
-            self.data = [row for index, row in enumerate(self.data) if index not in range(len(self.data))[rows]]
+            remove = range(len(self.data))[rows]
+        # Hvis en liste, tuple eller anden iterable bruges, fjernes alle rækker med id i denne
+        elif isinstance(rows, typing.Iterable):
+            remove = rows
+
+        self.data = deque(row for index, row in enumerate(self.data) if index not in remove)
+
+    def pop(self, times: int = 1, left: bool = False) -> DataEntry | DataList:
+        popped = [self.data.popleft() if left else self.data.pop() for time in range(times)]
+        return popped if len(popped) > 1 else popped[0]
 
     def remove_column(self, *columns: str) -> None:
         for column in columns:
