@@ -538,8 +538,14 @@ class InterTable:
                     raise ValueError(f"Der findes allerede en række med værdien ({col_name}={row_val}). Kolonnen '{col_name}' må kun indeholde unikke værdier.")
         return True
 
-    def pop(self, times: int) -> DataEntry:
-        pass
+    def pop(self, times: int = 1, left: bool = False) -> DataEntry:
+        popped = []
+        for time in range(times):
+            if left:
+                popped.append(self.data.popleft())
+            else:
+                popped.append(self.data.pop())
+        return popped
 
     def change_type(self, column: ColumnName, new_type: str) -> None:
         # Den nye datatype sættes
