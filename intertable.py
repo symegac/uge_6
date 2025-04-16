@@ -36,16 +36,10 @@ DataList = typing.NewType("DataList", deque[DataEntry])
 :type DataList: deque[DataEntry]
 """
 
-# MYSQL_TYPES = {
-#     str: ["varchar(", "char(", "tinytext", "text", "mediumtext", "longtext"],
-#     int: ["tinyint", "smallint", "mediumint", "integer", "int", "bigint", "year"],
-#     float: ["float", "double"],
-#     Decimal: ["decimal(", "numeric("],
-#     bool: ["boolean", "bool"],
-#     datetime: ["datetime"], date: ["date"],
-#     time: ["timestamp", "time"],
-#     tuple: ["enum("], set: ["set("],
-# }
+    # BINARIES
+    # bytes: / bytearray:
+    # "bit(", "binary(", "varbinary(",
+    # "tinyblob", "blob", "mediumblob", "longblob",
 PY_TYPES = {
     "varchar(": str, "char(": str, "tinytext": str,
     "text": str, "mediumtext": str, "longtext": str,
@@ -67,7 +61,7 @@ class Keys:
         unique: str | list[str] = ''
     ):
         self._primary: ColumnName | list[ColumnName] = None
-        self._foreign: dict[ColumnName, tuple[TableName, ColumnName]] = {}
+        self._foreign: ForeignKeys = {}
         self._unique: ColumnName | list[ColumnName] = None
 
         if primary:
@@ -113,7 +107,7 @@ class Keys:
 
     @property
     def primary(self):
-        if self._primary is None or not self._primary:
+        if not self._primary:
             return None
         return self._primary
 
@@ -122,7 +116,7 @@ class Keys:
         try:
             self._check_key(key)
         except Exception as err:
-            print("Ugyldig nøgle.", err)
+            print(f"Ugyldig nøgle {key}. {err}")
         else:
             self._primary = key
 
@@ -147,12 +141,6 @@ class Keys:
             except Exception as err:
                 print(f"Ugyldig nøgle {key}. {err}")
                 continue
-            # if not isinstance(k, str):
-            #     print(f"Ugyldig nøgle {key}. Kolonnenavnet skal være en tekststreng.")
-            #     continue
-            # if not k:
-            #     print(f"Ugyldig nøgle {key}. Kolonnenavnet må ikke være tomt.")
-            #     continue
             ref = key[k]
             if not isinstance(ref, tuple):
                 print(f"Ugyldig nøgle {key}. Referencen skal være en tuple.")
@@ -185,7 +173,7 @@ class Keys:
         try:
             self._check_key(key)
         except Exception as err:
-            print("Ugyldig nøgle.", err)
+            print(f"Ugyldig nøgle {key}. {err}")
         else:
             self._unique = key
 
@@ -206,11 +194,6 @@ class Keys:
         return k
 
 class DataField:
-    # BINARIES
-    # bytes: / bytearray:
-    # "bit(", "binary(", "varbinary(",
-    # "tinyblob", "blob", "mediumblob", "longblob",
-
     def __init__(self,
         name: str,
         datatype: str = '',
@@ -239,16 +222,19 @@ class DataField:
     def __repr__(self):
         if not self.name or not self.datatype:
             return None
+        col = self._unpack(full=False)
+        return repr(col)
+
+    def _unpack(self, full: bool = False) -> dict[str, typing.Any]:
         col = {
             "datatype": self.datatype,
             "nullable": self.nullable
         }
-        if self._default is not None:
+        if full or self._default is not None:
             col["default"] = self.default
-        if self.extra:
+        if full or self.extra:
             col["extra"] = self.extra
-
-        return repr(col)
+        return col
 
     def _is_valid_string(self, name: str) -> bool:
         if not name or name is None:
@@ -280,14 +266,6 @@ class DataField:
         # så returneres der med det samme
         if isinstance(default, str) and not self._is_valid_string(default):
             return False
-        # Finder datatypenavn, hvis det er en variabel datatype
-        # variable_type = self.datatype.find('(')
-        # if variable_type > 0:
-        #     type_index = self.datatype[0:variable_type+1]
-        # else:
-        #     type_index = self.datatype
-        # # Hvis self.datatype ikke er i listen over gyldige datatyper pr. Python-type,
-        # # så er den angivne standardværdi ikke gyldig
         # Tjekker om datatypen er den samme som defineret for kolonnen
         if type(default) != self._ptype:
             try:
@@ -324,7 +302,7 @@ class DataField:
     @property
     def nullable(self):
         return self._nullable
-    
+
     @nullable.setter
     def nullable(self, is_nullable: bool | typing.Any):
         if is_nullable:
@@ -386,7 +364,7 @@ class InterTable:
         self.name: TableName = name
         self.header: Header = header
         self.keys: Keys = keys
-        self.data: DataList = []
+        self.data: DataList = deque()
         for entry in data:
             self.__iadd__(entry)
 
@@ -492,7 +470,7 @@ class InterTable:
     # remove column % __mod__
 
     # join x & y __and__
-    # where x | y __matmul__
+    # where x | y __or__
 
     # reverse order (ud fra indbygget id-kolonne) -x __neg__
     # pivot ~x __invert__
@@ -611,10 +589,43 @@ class InterTable:
                     # føres denne ud af listen for at stå selv
                     if len(self.keys.unique) == 1:
                         self.keys.unique = self.keys.unique[0]
+            # DATA
             # Kolonnen fjernes i hver række i DataList
             for entry in self.data:
                 if column in entry:
                     entry.pop(column)
+
+    def to_csv(self, delimiter: str = ',', quote: bool = False) -> list[str]:
+        if not delimiter:
+            delimiter = ','
+        csv_list = []
+        header = delimiter.join([column for column in self.header])
+        csv_list.append(header)
+        to_str = lambda x: str(x) if not quote else f'"{x}"'
+        for entry in self.data:
+            entry_list = [
+                to_str(entry[column])
+                if column in entry and entry[column] is not None
+                else ''
+                for column in self.header
+            ]
+            row = delimiter.join(entry_list)
+            csv_list.append(row)
+        return csv_list
+
+    def to_dict(self) -> dict[str, typing.Any]:
+        dict_form = {
+            "name": self.name,
+            "header": {self.header[column].name: self.header[column]._unpack(full=True) for column in self.header},
+            "keys": self.keys.all,
+            "data": list(self.data)
+        }
+        return dict_form
+
+    def to_json(self, pretty: bool = False) -> str:
+        import json
+        dict_form = self.to_dict()
+        return json.dumps(dict_form, indent=4 if pretty else None)
 
 if __name__ == "__main__":
     pass
