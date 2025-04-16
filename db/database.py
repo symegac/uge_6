@@ -10,28 +10,28 @@ class Database(connector.DatabaseConnector):
     og som kan interagere med databasen og tabellerne, som den indeholder.
 
     :param username: Brugernavnet, der skal bruges til at logge ind med.
-        *Påkrævet*. Standardværdi: ``''``
+        *Påkrævet*. Standardværdi: `''`
     :type username: str
     :param password: Adgangskoden, der skal bruges til at logge ind med.
-        *Påkrævet*. Standardværdi: ``''``
+        *Påkrævet*. Standardværdi: `''`
     :type password: str
     :param database: Navnet på databasen, der evt. skal forbindes til.
-        *Upåkrævet*. Standardværdi: ``''``
+        *Upåkrævet*. Standardværdi: `''`
     :type database: str
     :param host: Adressen på serveren, der forbindes til.
-        Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
-        *Upåkrævet*. Standardværdi: ``''``
+        Hvis tom, bruges MySQL-standarden `"127.0.0.1"`.
+        *Upåkrævet*. Standardværdi: `''`
     :type host: str
     :param port: Porten, der forbindes til.
-        Hvis tom, bruges MySQL-standarden ``"3306"``.
-        *Upåkrævet*. Standardværdi: ``''``
+        Hvis tom, bruges MySQL-standarden `"3306"`.
+        *Upåkrævet*. Standardværdi: `''`
     :type port: str
-    :param init_load: En liste over datafiler, der ved initialisering automatisk skal
-        indlæses som tabeller i databasen.
-        *Upåkrævet*. Standardværdi: ``[]``
-    :type init_load: list[str]
+    :param init_load: En liste over tabeller, der ved initialisering automatisk skal
+        indlæses i databasen.
+        *Upåkrævet*. Standardværdi: `[]`
+    :type init_load: list[InterTable]
     :param preview: Bestemmer, om queries skal forhåndsvises inden eksekvering.
-        *Upåkrævet*. Standardværdi: ``True``
+        *Upåkrævet*. Standardværdi: `True`
     :type preview: bool
     """
     def __init__(self,
@@ -40,35 +40,35 @@ class Database(connector.DatabaseConnector):
         database: str = '',
         host: str = '',
         port: str = '',
-        init_load: list[str] = [],
+        init_load: list[InterTable] = [],
         preview: bool = True,
     ) -> None:
         """
         Konstruktøren af database-objektet.
 
         :param username: Brugernavnet, der skal bruges til at logge ind med.
-            *Påkrævet*. Standardværdi: ``''``
+            *Påkrævet*. Standardværdi: `''`
         :type username: str
         :param password: Adgangskoden, der skal bruges til at logge ind med.
-            *Påkrævet*. Standardværdi: ``''``
+            *Påkrævet*. Standardværdi: `''`
         :type password: str
         :param database: Navnet på databasen, der evt. skal forbindes til.
-            *Upåkrævet*. Standardværdi: ``''``
+            *Upåkrævet*. Standardværdi: `''`
         :type database: str
         :param host: Adressen på serveren, der forbindes til.
-            Hvis tom, bruges MySQL-standarden ``"127.0.0.1"``.
-            *Upåkrævet*. Standardværdi: ``''``
+            Hvis tom, bruges MySQL-standarden `"127.0.0.1"`.
+            *Upåkrævet*. Standardværdi: `''`
         :type host: str
         :param port: Porten, der forbindes til.
-            Hvis tom, bruges MySQL-standarden ``"3306"``.
-            *Upåkrævet*. Standardværdi: ``''``
+            Hvis tom, bruges MySQL-standarden `"3306"`.
+            *Upåkrævet*. Standardværdi: `''`
         :type port: str
         :param init_load: En liste over datafiler, der ved initialisering automatisk skal
             indlæses som tabeller i databasen.
-            *Upåkrævet*. Standardværdi: ``[]``
+            *Upåkrævet*. Standardværdi: `[]`
         :type init_load: list[str]
         :param preview: Bestemmer, om queries skal forhåndsvises inden eksekvering.
-            *Upåkrævet*. Standardværdi: ``True``
+            *Upåkrævet*. Standardværdi: `True`
         :type preview: bool
         """
         # Konfiguration
@@ -108,21 +108,21 @@ class Database(connector.DatabaseConnector):
         :param params: En dict eller liste af dicts indeholdende parameteriserede værdier
             bestemt af brugeren, der skal indsættes sikkert i queriet,
             bl.a. for at undgå SQL injection.
-            *Upåkrævet*. Standardværdi: ``{}``
+            *Upåkrævet*. Standardværdi: `{}`
         :type params: dict[str, Any] | list[dict[str, Any]]
         :param db: Bestemmer om handlingen udføres i en specifik database eller direkte.
-            Skal være ``False`` ved f.eks. oprettelse af ny database eller nulstilning af database.
-            *Påkrævet*. Standardværdi: ``True``
+            Skal være `False` ved f.eks. oprettelse af ny database eller nulstilning af database.
+            *Påkrævet*. Standardværdi: `True`
         :type db: bool
         :param read: Bestemmer, om der skal bruges en buffered cursor,
             så data kan læses og fetches fra databasen.
-            *Upåkrævet*. Standardværdi: ``False``
+            *Upåkrævet*. Standardværdi: `False`
         :type read: bool
 
         :return: Queriet kunne eksekveres, og handlingen blev gennemført.
-        :rtype: bool: ``True``
+        :rtype: bool: `True`
         :return: Handlingen kunne ikke gennemføres.
-        :rtype: bool: ``False``
+        :rtype: bool: `False`
         :return: Den læste data fra databasen, hvis en READ-operation kunne gennemføres.
         :rtype: list[tuple]
         """
@@ -242,29 +242,11 @@ class Database(connector.DatabaseConnector):
                 column_query += " NOT NULL"
             # TODO: Fiks default-værdier (1067 (42000): Invalid default value for 'col')
             if field.default is not None:
-                column_query += f" DEFAULT %(" + field.name + "_default)s"
+                column_query += " DEFAULT %(" + field.name + "_default)s"
                 column_params.update({f"{field.name}_default": field.default})
             if field.extra:
                 column_query += ' ' + field.extra
             column_queries.append(column_query)
-            # if "id" in column:
-            #     create_query += "INTEGER NOT NULL"
-            # elif "name" in column:
-            #     create_query += "VARCHAR(80) NOT NULL"
-            # elif "email" in column:
-            #     create_query += "VARCHAR(254) NOT NULL"
-            # elif "price" in column:
-            #     # For dette datasæt er (P=8,D=5) i DECIMAL(P,D)
-            #     # Men for pengebeløb burde D vel egentlig være 2
-            #     create_query += "DECIMAL(10,5) NOT NULL"
-            # elif "date" in column:
-            #     create_query += "DATETIME NOT NULL"
-            # elif column in ["customer", "product", "quantity", "zip_code", "order_status"]:
-            #     create_query += "INTEGER NOT NULL"
-            # elif "discount" in column:
-            #     create_query += "DECIMAL(3,2) NOT NULL"
-            # else:
-            #     create_query += "VARCHAR(80) NOT NULL"
         create_query += ", ".join(column_queries)
 
         if keys is not None:
@@ -314,8 +296,8 @@ class Database(connector.DatabaseConnector):
         :type table_name: str
         :param header: Angiver, om datasættet, der inputtes, indeholder en header med kolonnenavne,
             som skal springes over.
-            Hvis ``True`` forsøges dataen desuden at matches med den angivne tabels kolonnenavne.
-            *Upåkrævet*. Standardværdi: ``True``
+            Hvis `True` forsøges dataen desuden at matches med den angivne tabels kolonnenavne.
+            *Upåkrævet*. Standardværdi: `True`
         :type header: bool
 
         :return: Hvis tabellen ikke findes, eller hvis dataene ikke har samme antal kolonner som tabellen.
@@ -339,42 +321,16 @@ class Database(connector.DatabaseConnector):
         if self._execute(insert_query, insert_params):
             print(f"SUCCES: DataList indsat i tabellen '{table_name}'.")
 
-    def new_table(self,
-            data: list[str], # DataList
-            table_name: TableName = "table",
-            header: str = '' # Header
-        ) -> None:
+    def load(self, *tables: InterTable) -> None:
         """
-        Opretter en ny tabel og indsætter data i den.
+        Indlæser en eller flere tabeller i databasen.
 
-        Svarer til at bruge ``.create()`` efterfulgt af ``.insert()``.
-
-        :param data: Dataene, der danner grundlag for den nye tabel.
-            *Påkrævet*.
-        :type data: list[str]
-        :param table_name: Navnet på tabellen, der ønskes oprettet.
-            *Påkrævet*. Standardværdi: ``"table"``
-        :type table_name: str
-        :param header: En kommasepareret tekststreng indeholdende kolonnenavne.
-            *Upåkrævet*. Standardværdi: ``''``
-        :type header: str
-        """
-        if not header:
-            header, *body = data
-        self.create(header, table_name)
-        self.insert(body, table_name, header=False)
-
-    def load(self, *tables: str) -> None:
-        """
-        Indlæser data fra de(n) angivne fil(er) og opretter en tabel i databasen for hver af dem.
-
-        :param tables: En eller flere filer, der skal laves en tabel af.
-        :type tables: str
+        :param tables: En eller tabeller, der skal indlæses i databasen.
+        :type tables: InterTable
         """
         for table in tables:
-            raw_data = util.read_csv(table)
-            table_name = util.get_name(table)
-            self.new_table(raw_data, table_name)
+            self.create(table)
+            self.insert(table)
 
     # READ-operationer
     # TODO: Tilføj en måde, hvorpå foreign keys kan bruges til at joine eller læse data fra andre tabeller
@@ -398,31 +354,31 @@ class Database(connector.DatabaseConnector):
             *Upåkrævet*.
         :type column_name: str
         :param joins: En liste med en dict indeholdende parametrene for hvert join, der skal indsættes i queriet.
-            Et join har som regel formen ``{
+            Et join har som regel formen `{
                 "right": tabel_2,
                 "on_left": kolonne_1,
                 "on_right": kolonne_2.
                 "join_type": JOIN-type
-            }`` i brug, men parameteren ``"left"`` kan også oplyses om nødvendigt.
-            *Upåkrævet*. Standardværdi: ``[]``
+            }` i brug, men parameteren `"left"` kan også oplyses om nødvendigt.
+            *Upåkrævet*. Standardværdi: `[]`
         :type joins: list[dict[str, str]]
         :param order: Kolonnen, som resultatet ordnes efter.
             Enten *int*, der vælger indekset af kolonnen blandt de valgte kolonner,
             eller *str*, der vælger ud fra navnet på kolonnen.
-            *Upåkrævet*. Standardværdi: ``0``
+            *Upåkrævet*. Standardværdi: `0`
         :type order: int | str
         :param direction: Angiver hvilken retning, resultatet skal ordnes i.
-            ``'a'``, ``"asc"`` eller ``"ascending"`` er opadgående rækkefølge, mens
-            ``'d'``, ``"desc"`` eller ``"descending"`` er nedadgående rækkefølge.
-            *Upåkrævet*. Standardværdi: ``'a'``
+            `'a'`, `"asc"` eller `"ascending"` er opadgående rækkefølge, mens
+            `'d'`, `"desc"` eller `"descending"` er nedadgående rækkefølge.
+            *Upåkrævet*. Standardværdi: `'a'`
         :type direction: str
         :param limit: Mængden af rækker, der skal læses.
-            Når værdien er ``0``, læses alle resultater.
-            *Upåkrævet*. Standardværdi: ``0``
+            Når værdien er `0`, læses alle resultater.
+            *Upåkrævet*. Standardværdi: `0`
         :type limit: int
         :param offset: Mængden af rækker, der springes over, inden læsningen påbegyndes.
-            Når værdien er ``0``, læses alle resultater.
-            *Upåkrævet*. Standardværdi: ``0``
+            Når værdien er `0`, læses alle resultater.
+            *Upåkrævet*. Standardværdi: `0`
         :type offset: int
 
         :return: En liste med rækker indeholdende data fra de(n) valgte kolonne(r).
@@ -562,12 +518,12 @@ class Database(connector.DatabaseConnector):
         :param order: Kolonnen, som resultatet ordnes efter.
             Enten *int*, der vælger indekset af kolonnen blandt de valgte kolonner,
             eller *str*, der vælger ud fra navnet på kolonnen.
-            *Upåkrævet*. Standardværdi: ``0``
+            *Upåkrævet*. Standardværdi: `0`
         :type order: int | str, optional
         :param direction:  Angiver hvilken retning, resultatet skal ordnes i.
-            ``'a'``, ``"asc"`` eller ``"ascending"`` er opadgående rækkefølge, mens
-            ``'d'``, ``"desc"`` eller ``"descending"`` er nedadgående rækkefølge.
-            *Upåkrævet*. Standardværdi: ``'a'``
+            `'a'`, `"asc"` eller `"ascending"` er opadgående rækkefølge, mens
+            `'d'`, `"desc"` eller `"descending"` er nedadgående rækkefølge.
+            *Upåkrævet*. Standardværdi: `'a'`
         :type direction: str, optional
 
         :return: ORDER BY-delen af et query.
@@ -595,7 +551,7 @@ class Database(connector.DatabaseConnector):
         :type limit: int
         :param offset: Bestemmer, hvor mange rækker, der springes over,
             inden læsning påbegyndes.
-            *Upåkrævet*. Standardværdi: ``0``
+            *Upåkrævet*. Standardværdi: `0`
         :type offset: int
 
         :return: En tuple bestående af en tekststreng til queriet,
@@ -637,15 +593,15 @@ class Database(connector.DatabaseConnector):
             *Påkrævet*.
         :type on_left: str
         :param direction: Typen af join. Kan være
-            ``'i'``, ``'o'``, ``'l'``, ``'r'``,
-            ``"inner"``, ``"outer"``, ``"left"`` eller ``"right"``.
-            *Påkrævet*. Standardværdi: ``'i'``
+            `'i'`, `'o'`, `'l'`, `'r'`,
+            `"inner"`, `"outer"`, `"left"` eller `"right"`.
+            *Påkrævet*. Standardværdi: `'i'`
         :type direction: str
 
         :return: JOIN-delen af et query.
         :rtype: str
         :return: Hvis de to tabeller ikke kunne joines.
-        :rtype: str: ``''``
+        :rtype: str: `''`
         """
         tables = [table[0] for table in self.info()]
         for table in [left, right]:
@@ -677,7 +633,7 @@ class Database(connector.DatabaseConnector):
 
         :param table_name: Navnet på tabellen, hvis info efterspørges.
             Hvis navnet er tomt, hentes info om databasen.
-            *Påkrævet*. Standardværdi: ``''``
+            *Påkrævet*. Standardværdi: `''`
         :type table_name: str
 
         :return: En liste indeholdende en tuple med info for hver kolonne i tabellen.
@@ -688,7 +644,7 @@ class Database(connector.DatabaseConnector):
         :return: Hvis READ-operationen ikke kunne gennemføres.
             Enten fordi der ikke er nogen forbindelse til en database,
             eller forbi tabellen eller databasen ikke eksisterer.
-        :rtype: bool: ``False``
+        :rtype: bool: `False`
         """
         if table_name:
             describe_query = f"DESCRIBE `{table_name}`"
@@ -868,7 +824,7 @@ class Database(connector.DatabaseConnector):
             *Påkrævet*.
         :type table_name: str
         :param force: Bestemmer om bekræftelse af operation skal springes over.
-            *Upåkrævet*. Standardværdi: ``False``
+            *Upåkrævet*. Standardværdi: `False`
         :type force: bool
         """
         drop_query = f"DROP TABLE `{table_name}`"
@@ -890,7 +846,7 @@ class Database(connector.DatabaseConnector):
             *Påkrævet*.
         :type table_name: str
         :param force: Bestemmer om bekræftelse af operation skal springes over.
-            *Upåkrævet*. Standardværdi: ``False``
+            *Upåkrævet*. Standardværdi: `False`
         :type force: bool
         """
         truncate_query = f"TRUNCATE TABLE `{table_name}`"
