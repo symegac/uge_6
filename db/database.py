@@ -1,6 +1,5 @@
 import getpass
 import typing
-from . import util
 from . import connector
 from intertable import *
 
@@ -40,8 +39,9 @@ class Database(connector.DatabaseConnector):
         database: str = '',
         host: str = '',
         port: str = '',
-        init_load: list[InterTable] = [],
+        *,
         preview: bool = True,
+        init_load: list[InterTable] = []
     ) -> None:
         """
         Konstruktøren af database-objektet.
@@ -63,10 +63,10 @@ class Database(connector.DatabaseConnector):
             Hvis tom, bruges MySQL-standarden `"3306"`.
             *Upåkrævet*. Standardværdi: `''`
         :type port: str
-        :param init_load: En liste over datafiler, der ved initialisering automatisk skal
-            indlæses som tabeller i databasen.
+        :param init_load: En liste over tabeller, der ved initialisering automatisk skal
+            indlæses i databasen.
             *Upåkrævet*. Standardværdi: `[]`
-        :type init_load: list[str]
+        :type init_load: list[InterTable]
         :param preview: Bestemmer, om queries skal forhåndsvises inden eksekvering.
             *Upåkrævet*. Standardværdi: `True`
         :type preview: bool
@@ -86,7 +86,7 @@ class Database(connector.DatabaseConnector):
                     # Skal logge ind igen for at forny forbindelserne
                     self._full_login(getpass.getpass("Indtast adgangskode igen: "))
             # Loader tabeller til databasen fra start, hvis nogen oplyses
-            elif init_load:
+            if self.connection and init_load:
                 self.load(*init_load)
 
     def _execute(self,
@@ -314,7 +314,7 @@ class Database(connector.DatabaseConnector):
         insert_query += ", ".join([f"%({header[column].name})s" for column in header]) + ')'
 
         # Danner dict over parametre til indsættelse af data
-        insert_params = data.data
+        insert_params = list(data.data)
 
         self._preview(insert_query)
 
@@ -603,13 +603,13 @@ class Database(connector.DatabaseConnector):
         :return: Hvis de to tabeller ikke kunne joines.
         :rtype: str: `''`
         """
-        tables = [table[0] for table in self.info()]
+        tables = self.info()
         for table in [left, right]:
             if table not in tables:
                 print(f"Tabellen '{table}' findes ikke i databasen.")
                 return ''
-        left_columns = [column[0] for column in self.info(left)]        # hurtigere end list(zip(*self.info(left)))[0] ?
-        right_columns = [column[0] for column in self.info(right)]      # hurtigere end list(zip(*self.info(left)))[0] ?
+        left_columns = self.info(left)        # hurtigere end list(zip(*self.info(left)))[0] ?
+        right_columns = self.info(right)      # hurtigere end list(zip(*self.info(left)))[0] ?
         if on_left not in left_columns or on_right not in right_columns:
             return ''
 
@@ -627,7 +627,7 @@ class Database(connector.DatabaseConnector):
 
         return join_query
 
-    def info(self, table_name: TableName = '') -> DataField | list[tuple[TableName]] | bool:
+    def info(self, table_name: TableName = '') -> DataField | tuple[TableName] | bool:
         """
         Henter info om databasens eller en tabels opbygning.
 
@@ -658,6 +658,7 @@ class Database(connector.DatabaseConnector):
             if table_name:
                 print(f"SUCCES: Hentede info om tabellen '{table_name}'.")
             else:
+                table_info = tuple(table[0] for table in table_info)
                 print(f"SUCCES: Hentede info om databasen '{self.database}'.")
         return table_info
 
@@ -867,7 +868,7 @@ class Database(connector.DatabaseConnector):
         Sletter nuværende database og gendanner derefter en tom database med samme navn.
 
         :param force: Bestemmer om bekræftelse af operation skal springes over.
-            *Upåkrævet*. Standardværdi: False
+            *Upåkrævet*. Standardværdi: `False`
         :type force: bool
         """
         drop_query = f"DROP DATABASE `{self.database}`"

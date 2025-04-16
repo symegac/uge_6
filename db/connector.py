@@ -1,5 +1,6 @@
 import mysql.connector
 import getpass
+import typing
 
 class DatabaseConnector:
     """
@@ -83,6 +84,12 @@ class DatabaseConnector:
 
         # Forsøger at oprette forbindelser
         self._full_login(password)
+
+    def __enter__(self) -> typing.Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.logout()
 
     def _error(self, msg: str, error: str) -> None:
         error_message = f"FEJL: {msg}"

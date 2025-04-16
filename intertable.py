@@ -371,6 +371,12 @@ class InterTable:
     def __repr__(self) -> dict[str, TableName | Header | Keys | DataList]:
         return repr({"name": self.name, "header": self.header, "keys": self.keys.all, "data": self.data})
 
+    def __enter__(self) -> typing.Self:
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.refresh()
+
     def __len__(self) -> int:
         # Længden af objektet findes altid ud fra DataList
         return len(self.data)
