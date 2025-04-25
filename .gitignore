@@ -1,0 +1,12 @@
+__pycache__
+cache
+saves
+.venv
+.vscode
+secret.txt
+log.txt
+traceback.txt
+config.py
+*.env
+*_orig.*
+*_new.*
