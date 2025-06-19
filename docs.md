@@ -1,23 +1,5 @@
-# Uge 6 — ETL-opgave
-## Introduktion til opgaven
-### Formål
-Den fiktive virksomhed *BikeCorp Inc.* skal have konsolideret data fra tre forskellige kilder til en enkelt database, hvorudfra virksomheden får et solidt datagrundlag som pejlemærke for forretningens fremtidige drift.
-I opgaven er der fokus på design og implementering af ETL-processer i kode, dokumentation af trufne beslutninger og intentionen bag ETL-processer, samt kommunikation af relevante dele af ETL-processen til kolleger, ledere eller andre i virksomheden.
-
-### Produktets indhold
-En præsentation, der skal indeholde følgende:
-1. Et overblik over den endelige datastruktur, dvs. database-schemaet, samt evt. andre relevante ting.
-2. Introduktion til dokumentationen, så brugere af databasen kan tjekke forskellige ting relevante for deres arbejde.
-3. Evt. implementeringen af processen i kode.
-4. Evt. om interface til databasen lavet i Python eller PowerBI.
-
-## Data
-Dataen til opgaven forefindes tre forskellige steder:
-1. Lokalt på arbejdscomputeren i form af CSV-filer ([Data CSV](data_csv/)).
-2. Hos en central butik, som kan tilgås via en API ([Data API](data_api/)).
-3. I en eksisterende database ([Data DB](data_db/)).
-
-### Extraction
+# Dokumentation for ETL-processer og *intertable*-formatet
+## Extraction
 Her er det vigtigt at kigge på, hvordan man forbinder til de forskellige datakilder, og hvordan man læser dataene. Hertil er det også vigtigt at finde ud af, hvilket format den læste forekommer i.
 * **API**: Data hentet gennem en REST API vil typisk være i JSON- eller XML-format. I denne opgave er det JSON. Det kan man indlæse i Python til forskellige datastrukturer, alt efter hvilken metode man bruger. Det enkleste er at omdanne JSON til en *dict*.
 * **CSV**: Data indlæst fra en CSV-fil vil som udgangspunkt være en kommasepareret tekststreng, men hvis man bruger et specifikt modul til at indlæse dataen, kan den være i et andet format, f.eks. en *DataFrame* eller *dict*.
@@ -25,7 +7,7 @@ Her er det vigtigt at kigge på, hvordan man forbinder til de forskellige dataki
 
 Det er en fordel, hvis man allerede her i extraction-fasen kan få læst dataene fra de forskellige kilder ind til samme type i Python, så det er nemt at skrive kode, der fungerer på data fra alle kilderne. Det kunne f.eks. være en *polars*- eller *pandas*-*DataFrame*, eller en *dict*, så der er et eksplicit forhold mellem kolonne/felt og tilhørende værdi, og at det for `null`-værdier tydeligt markeres, hvilket datafelt de hører til.
 
-#### Besluttet proces
+### Besluttet proces
 * **API**: Til at hente data fra API'en bruger jeg modulerne *requests* og *json*. Førstnævnte bruges til at sende selve requesten til API'en, og sidstnævnte bruges derefter til at afkode JSON-formatet til en Python-*dict*.
 * **CSV**: Til at hente data fra CSV-filerne tager jeg inspiration fra noget af koden, som jeg skrev til [*uge_2*](https://github.com/symegac/uge_2/blob/main/opgave_3/src/fejlhåndtering.py) og [*uge_4*](https://github.com/symegac/uge_4/blob/main/src/database.py), dog i revideret form. Jeg læser dataene og omdanner dem til en Python-*dict*.
 * **DB**: Til at hente data fra MySQL-databasen, bruger jeg igen min kode fra [*uge_4*](https://github.com/symegac/uge_4/blob/main/src/database.py) i revideret udgave til at forbinde til databasen og læse dataene og omdanne dem til en Python-*dict*.
@@ -133,7 +115,7 @@ tabelnavn = {
 
 Jeg har valgt at bruge dette format, dels fordi det er utrolig let at gå fra JSON til dette format, dels fordi jeg i *uge_2*-opgaven outputtede rensede data som en *dict* og derfor allerede har noget kode, dels fordi *mysql-connector-python* i forvejen bruger en *dict* til at indsætte værdierne i parameteriserede queries, og jeg derfor også har noget kode fra *uge_4*-opgaven i forvejen.
 
-### Transformation
+## Transformation
 Der er mange vigtige ting at kigge på, når det angår transformation af den udtrukne data.
 Først er der de forskellige datakilders struktur. Hvilke datafelter har de, og hvilke datatyper?
 Hvilke relationer er der i de forskellige datasæt? Primary keys og foreign keys?
@@ -151,7 +133,7 @@ Herefter beskrives datasættets struktur i en tabel, der indeholder følgende ko
 
 Til sidst kommenterer jeg på relevante overvejelser vedr. datarensning og -transformation af de forskellige tabeller i datasættene og forklarer, hvorfor jeg evt. udelader kolonner eller opretter nye, når jeg samler alle dataene til sidst.
 
-#### [Brands](data_db/brands.csv)
+### [Brands](data_db/brands.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
 Eksempel på rådata: `[(1, 'Electra'),` ... `]`
@@ -189,21 +171,21 @@ brands = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `brand_id` | *int* | `\d` | `smallint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
 | `brand_name` | *str* | `[A-z ]+` | `varchar(40) NOT NULL` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (brand_id)`
 
-##### Kommentarer
+#### Kommentarer
 Til `brand_id` bruger jeg `smallint`, da det er usandsynligt, at virksomheden nogensinde kommer til at forhandle mere end 65535 ($2^{16}$) forskellige brands.
 
 Det længste navn i tabellen over brands er på 12 bogstaver, så man kunne gøre `varchar` endnu kortere end 40 tegn og spare lidt, men der skal på den anden side også være noget plads til et potentielt langt brandnavn.
 
-#### [Categories](data_db/categories.csv)
+### [Categories](data_db/categories.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
 Eksempel på rådata: `[(1, 'Children Bicycles'),` ... `]`
@@ -241,19 +223,19 @@ categories = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `category_id` | *int* | `\d` | `smallint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
 | `category_name` | *str* | `[A-z ]+` | `varchar(40) NOT NULL` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (category_id)`
 
-##### Kommentarer
+#### Kommentarer
 Se [ovenfor](#kommentarer) for længden af `category_id` og `category_name`. Her er det længste navn i `category_name` på 19 bogstaver, altså stadig under halvdelen af den samlede allokerede længde i `varchar`.
 
-#### [Customers](data_api/data/customers.csv)
+### [Customers](data_api/data/customers.csv)
 Hentet gennem: API
 Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"customer_id":1,"first_name":"Debra","last_name":"Burks","phone":"NULL","email":"debra.burks@yahoo.com","street":"9273 Thorne Ave. ","city":"Orchard Park","state":"NY","zip_code":14127},` ... `]'`
@@ -329,7 +311,7 @@ customers = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `customer_id` | *int* | `\d{1,4}` | `mediumint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
@@ -342,10 +324,10 @@ customers = {
 | `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
 | `zip_code` | *int* | `\d{5}` | `mediumint unsigned NOT NULL` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (customer_id)`
 
-##### Kommentarer
+#### Kommentarer
 Virksomheden sælger ikke internationalt, og derfor er `phone`, `state` og `zip_code` fast defineret med `char` (sparer lidt tid og plads ved de to første) og `mediumint` (sparer 1 byte pr. entry...) efter det amerikanske format. Men hvis virksomheden en dag ville udvide til internationalt salg, ville det være en god ide at bruge mere variable datatyper. I det tilfælde skulle man også tilføje en `country`-kolonne og udfylde den med *USA* før tilføjelse af ny data.
 Formatet for `phone` kunne man godt ændre fra *(###) ###-####* til f.eks. *###-###-####*, som er lidt lettere at splitte, hvis man skal bruge det programmatisk, eller endda *#########*. Men enhver autodialler brugt i USA godtager vel standardformatet som input, og så kan man lige så godt bevare formatet, der på f.eks. udskrevne kundelister også er mere læsbart for virksomhedens ansatte.
 Der bliver dog ikke taget højde for phone extensions eller landekode, hvilket ville gøre telefonnummeret endnu længere. Altså skal man sørge for at normalisere og validere telefonnumre, før de indsættes i tabellen. Uanset hvad skal det opbevares som tekst, da `int`-familien skærer foranstående nuller fra, da det ville kunne ødelægge internationale numre.
@@ -374,7 +356,7 @@ I kolonnen `email` er der 10 emailadresser, der indeholder en apostrof i lokalad
 
 I kolonnen `street` ender alle entries på et mellemrum. Dette lader ikke til at have en særlig betydning og strippes derfor væk.
 
-#### [Order Items](data_api/data/order_items.csv)
+### [Order Items](data_api/data/order_items.csv)
 Hentet gennem: API
 Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"order_id":1,"item_id":1,"product_id":20,"quantity":1,"list_price":599.99,"discount":0.2},` ... `]`
@@ -438,7 +420,7 @@ order_items = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `order_id` | *int* | `\d{1,4}` | `mediumint unsigned NOT NULL` |
@@ -448,14 +430,14 @@ order_items = {
 | `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
 | `discount` | *decimal.Decimal* | `0\.\d{1,2}` | `decimal(3,2) NOT NULL DEFAULT (0.00)` |
 
-##### Keys
+#### Keys
 `CONSTRAINT PK_order_item PRIMARY KEY (order_id,item_id)`
 
 `FOREIGN KEY (order_id) REFERENCES orders(order_id)`
 
 `FOREIGN KEY (product_id) REFERENCES products(product_id)`
 
-##### Kommentarer
+#### Kommentarer
 Kolonnen `item_id` opdeler hver ordre i de forskellige produkter, der købtes. Selvom værdien for alle ordrer i datasætten kun er etcifret, kunne man i teorien godt få en ordre med 10+ forskellige produkter, og derfor kan man ikke sætte en bestemt grænse på denne. Men jeg bruger alligevel `tinyint`, fordi jeg ikke regner med, at nogen bestiller over 255 forskellige produkter i en ordre.
 Man kunne også overveje, om der overhovedet er nogen grund til at bevare `item_id`. Det eneste, jeg lige kan komme på, er, at man måske kunne bruge det til at analysere noget med vareprioritering, da tallet afspejler rækkefølgen, hvori de forskellige produkter i en given ordre blev lagt i varekurven. Ellers ved
 
@@ -478,7 +460,7 @@ decimal.Decimal('6.38')
 ```
 Man ville ellers forvente, at 6.125 blev rundet op til 6.13, ligesom 6.375 bliver rundet til 6.38.
 
-#### [Orders](data_api/data/orders.csv)
+### [Orders](data_api/data/orders.csv)
 Hentet gennem: API
 Rådataformat: *str* (JSON)
 Eksempel på rådata: `'[{"order_id":1,"customer_id":259,"order_status":4,"order_date":"01/01/2016","required_date":"03/01/2016","shipped_date":"03/01/2016","store":"Santa Cruz Bikes","staff_name":"Mireya"},` ... `]`
@@ -551,7 +533,7 @@ orders = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `order_id` | *int* | `\d{1,4}` | `mediumint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
@@ -565,7 +547,7 @@ orders = {
 | `staff_id` | *int* | — | `smallint unsigned NOT NULL` |
 | `staff_name` | *str* | `[A-z]+` | — |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (order_id)`
 
 `FOREIGN KEY (customer_id) REFERENCES customers(customer_id)`
@@ -574,7 +556,7 @@ orders = {
 
 `FOREIGN KEY (staff_id) REFERENCES staff(staff_id)`
 
-##### Kommentarer
+#### Kommentarer
 Jeg erstatter `store` og `staff_name` med hhv. `store_id` og `staff_id`, se hvorfor [her](#kommentarer-8) og [her](#kommentarer-6).
 Man kunne overveje helt at fjerne `store`/`store_id`, fordi denne værdi kan findes gennem `staff_id`. Men en ansat kan jo også skifte arbejdsplads internt i virksomheden, og hvis man skal lave statistik over salg fra bestemte branches, duer det ikke, at et salg pludselig tæller for en anden branch, bare fordi medarbejderen er flyttet derover. Hvis en succesfuld sælger f.eks. bliver forfremmet til manager af en ny branch, skal vedkommendes salgsstatistik jo ikke tælle med for en nyåbnet butik, der ikke har solgt noget endnu. Så kommer ordredatoerne også til at ligge før denne branchs åbningsdato.
 
@@ -594,7 +576,7 @@ Statussen 3 kunne f.eks. også være en afbestilt ordre, da den findes rundt omk
 Status 1 og 2 findes kun i bunden af datasættet i måneden april 2018, der ud fra de senest afsendte ordrer med status 4 i starten af april ser ud til at passe med ikke-afsendte order, der er modtaget eller under forberedelse i "nutiden". 
 Men der er også status 3 i bunden, der ser ud til at være "fremtidige" ordrer, og altså ikke afbestillinger. Måske er det rettere inaktive ordrer.
 
-#### [Products](data_db/products.csv)
+### [Products](data_db/products.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
 Eksempel på rådata: `[(1, 'Trek 820 - 2016', 9, 6, 2016, 379.99),` ... `]`
@@ -657,7 +639,7 @@ products = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `product_id` | *int* | `\d{1,3}` | `mediumint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
@@ -667,17 +649,17 @@ products = {
 | `model_year` | *int* | `\d{4}` | `year NOT NULL` |
 | `list_price` | *decimal.Decimal* | `\d{2,5}\.*\d*` | `decimal(8,2) NOT NULL` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (product_id)`
 
 `FOREIGN KEY (brand_id) REFERENCES brands(brand_id)`
 
 `FOREIGN KEY (category_id) REFERENCES categories(category_id)`
 
-##### Kommentarer
+#### Kommentarer
 Se [her](#kommentarer-3) for længden af `list_price`.
 
-#### [Staff](data_csv/staffs.csv)
+### [Staff](data_csv/staffs.csv)
 Hentet gennem: CSV
 Rådataformat: *list[str]* (CSV)
 Eksempel på rådata: `['Fabiola,Jackson,fabiola.jackson@bikes.shop,(831) 555-5554,1,Santa Cruz Bikes,3700 Portola Drive,NULL',` ... `]`
@@ -752,7 +734,7 @@ staff = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `staff_id` | *int* | — | `smallint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
@@ -766,15 +748,14 @@ staff = {
 | `street` | *str* | `\d+[A-Z]* [A-z \.\d]+` | — |
 | `manager_id` | *int* | `\d+` eller `NULL` | `smallint unsigned` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (staff_id)`
 
 `FOREIGN KEY (store_id) REFERENCES stores(store_id)`
 
 `FOREIGN KEY (manager_id) REFERENCES staff(staff_id)`
 
-
-##### Kommentarer
+#### Kommentarer
 Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Navnet på kolonnen `name` ændrer jeg samtidig til `first_name`.
 
 Jeg laver en kolonne `staff_id` som primary key. `manager_id` bruger allerede et nummer for at referere til en ansat. Chefen Fabiola Jackson har ingen leder, så værdien her er `NULL` (hvilket bliver til `None` i *dict*-strukturen?), mens Mireya, Jannette og Kali leder hver deres afdeling, og alle har Fabiola (1) som chef. Genna og Virgie i Santa Cruz har Mireya (2) som chef, Marceline og Venita i Baldwin har Jannette (5) som chef. Layla og Bernardine i Rowlett burde stå med Kali (8) som chef, men de står med Venita (7) som chef. Det giver ikke mening, at ansatte i Rowlett har en ansat i Baldwin som chef, mens lederen i Rowlett ikke har nogle ansatte under sig. Det er et eksempel på, hvorfor det er en god ide at få et id som primary key, så man ikke laver fejl som denne ved at tælle manuelt.
@@ -785,7 +766,7 @@ Jeg gør `email` og `phone` til kolonner, der skal indeholde unikke værdier, da
 
 `street` er ikke medarbejderens adresse, men butikkens, så denne kolonne fjernes sammen med `store_name`, da de begge kan udledes af `store_id`.
 
-#### [Stock](data_db/stocks.csv)
+### [Stock](data_db/stocks.csv)
 Hentet gennem: MySQL-DB
 Rådataformat: *list[tuple]*
 Eksempel på rådata: `[('Santa Cruz Bikes', 1, 27), ` ... `]`
@@ -830,7 +811,7 @@ stock = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `store_id` | *int* | — | `smallint unsigned NOT NULL` |
@@ -838,15 +819,15 @@ stock = {
 | `product_id` | *int* | `\d{1,3}` | `mediumint unsigned NOT NULL` |
 | `quantity` | *int* | `\d{1,2}` | `mediumint unsigned NOT NULL` |
 
-##### Keys
+#### Keys
 `CONSTRAINT PK_store_id_product_id PRIMARY KEY (store_id,product_id)`
 
 `FOREIGN KEY (product_id) REFERENCES products(product_id)`
 
-##### Kommentarer
+#### Kommentarer
 Jeg refererer til butikkens id istf. navn, se [hvorfor](#kommentarer-8). Selvom virksomheden har meget lang udsigt til at åbne mere end 255 butikker, så bruger jeg `smallint` hertil for en sikkerheds skyld.
 
-#### [Stores](data_csv/stores.csv)
+### [Stores](data_csv/stores.csv)
 Hentet gennem: CSV
 Rådataformat: *list[str]* (CSV)
 Eksempel på rådata: `['Santa Cruz Bikes,(831) 476-4321,santacruz@bikes.shop,3700 Portola Drive,Santa Cruz,CA,95060',` ... `]`
@@ -914,7 +895,7 @@ stores = {
 ```
 </details>
 
-##### Struktur
+#### Struktur
 | Kolonne | Type | Format (regex) | SQL |
 |:-------:|:----:|:------:|:---:|
 | `store_id` | *int* | — | `smallint unsigned NOT NULL AUTO_INCREMENT UNIQUE` |
@@ -926,30 +907,30 @@ stores = {
 | `state` | *str* | `[A-Z]{2}` | `char(2) NOT NULL` |
 | `zip_code` | *int* | `\d{5}` | `mediumint unsigned NOT NULL` |
 
-##### Keys
+#### Keys
 `PRIMARY KEY (store_id)`
 
-##### Kommentarer
+#### Kommentarer
 Jeg har valgt at introducere et heltal `store_id` som primary key, da det er besværligt at skulle skrive hele butiksnavnet, hver gang data fra tabellen skal bruges. Der er også risiko for at komme til at lave stavefejl, hvorimod et heltal på et enkelt ciffer er meget hurtigere at bruge og sværere at skrive forkert.
 Derudover har butiksnavnet formatet [bynavn] + 'Bikes'. I USA er der alt efter kilden mellem 34 og 67 forskellige befolkede steder med toponymet Springfield. Hvis virksomheden en dag havde en afdeling i flere forskellige byer ved navn Springfield, ville `name` ikke kunne bruges som primary key, da de alle ville hedde 'Springfield Bikes', eller måske 'Springfield Bikes Oregon'. Det er sikrere at bruge `store_id`.
 
 Mange af `varchar`-længderne forklares [her](#kommentarer-2).
 
-### Loading
+## Loading
 Da vi på kurset har arbejdet med MySQL, er det kun naturligt, at den samlede data lagres i sådan en databse.
 
-#### Relationer
+### Relationer
 Når tabellerne skal loades ind i databasen, er det vigtigt, at de loades i den rigtige rækkefølge, så relationerne mellem dem kan oprettes.
 Dette gøres ud fra foreign keys. Herigennem kan man se, hvilke data der er afhængige af værdier i en anden tabel
 
-##### Afhængigheder
+#### Afhængigheder
 * stores > staff
 * orders products > order_items
 * customers stores staff > orders
 * brands categories > products
 * products > stock
 
-#### Fremgangsmåde
+### Fremgangsmåde
 Først loades tabellerne uden foreign keys.
 Herefter tabellerne, der refererer til disse (1.-leds foreign keys).
 Så kommer tabellerne, der refererer til tabeller med 1.-leds foreign keys (2.-leds foreign keys).
@@ -960,8 +941,8 @@ Til sidst tabellerne, der refererer til dem med 2.-leds foreign keys (3.-leds fo
 | *brands, categories, customers, stores* | *staff* | *orders, products* | *order_items, stock* |
 
 
-##### Ændringer
-Ændrede `products.product_name)` til `varchar(80)`, fordi det længste produktnavn var på 53 tegn.
+#### Ændringer
+Jeg ændrede `products.product_name` til `varchar(80)`, fordi det længste produktnavn var på 53 tegn.
 
 `product_id` 13 og 21 har samme `product_name`, dette er mere kompliceret at rette pga. foreign keys til tabellen.
 Derfor fjerner jeg `unique` fra `product_name`.
