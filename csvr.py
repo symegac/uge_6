@@ -1,8 +1,8 @@
-import os.path
+from pathlib import Path
 from intertable import *
 
 # TODO: Validerer ikke .csv-filens struktur endnu
-def read_csv(filename: str, data_dir: str = "data") -> list[str]:
+def read_csv(filename: str, data_dir: str | Path) -> list[str]:
     """
     Indlæser en *.csv*-fil og omdanner den til rådata, der kan behandles.
 
@@ -16,7 +16,7 @@ def read_csv(filename: str, data_dir: str = "data") -> list[str]:
     :return: Den indlæste fil med hver række som en tekststreng i en liste.
     :rtype: list[str]
     """
-    data_file = os.path.join(data_dir, filename)
+    data_file = Path(data_dir, filename)
     try:
         with open(data_file, 'r', encoding="utf-8") as file:
             raw_data = file.readlines()
@@ -28,7 +28,7 @@ def read_csv(filename: str, data_dir: str = "data") -> list[str]:
         print(f"SUCCES: Indlæste filen '{filename}'.")
         return raw_data
 
-def get_name(path: str) -> str:
+def get_name(path: str | Path) -> str:
     """
     Finder navnet på en tabel ud fra navnet på den angivne fil.
 
@@ -43,7 +43,7 @@ def get_name(path: str) -> str:
     :return: Navnet på tabellen, baseret på filens navn.
     :rtype: str
     """
-    return os.path.splitext(os.path.basename(path))[0]
+    return Path(path).stem
 
 def intertable(name: str, raw_data: list[str]) -> InterTable:
     columns, *rows = raw_data
@@ -55,10 +55,12 @@ def intertable(name: str, raw_data: list[str]) -> InterTable:
     return InterTable(name, Header(header), Keys(), data)
 
 if __name__ == "__main__":
-    import os.path
-    sta = os.path.join("data_csv", "staffs.csv")
-    sto = os.path.join("data_csv", "stores.csv")
-    staffs = intertable(get_name(sta), read_csv("staffs.csv", "data_csv"))
-    stores = intertable(get_name(sto), read_csv("stores.csv", "data_csv"))
+    from config import CSV
+    stf = "staffs.csv"
+    sts = "stores.csv"
+    sta = CSV.dir / stf
+    sto = CSV.dir / sts
+    staffs = intertable(get_name(sta), read_csv(stf, CSV.dir))
+    stores = intertable(get_name(sto), read_csv(sts, CSV.dir))
     print(staffs)
     print(stores)

@@ -15,7 +15,7 @@ def main() -> bool:
         "/orders",
         "/order_items",
         "/customers",
-        host=API.localhost,
+        host=API.host,
         port=API.port
     )
     # Rådataene gemmes i InterTable-formatet
@@ -26,9 +26,9 @@ def main() -> bool:
 ### DB ###
     # Database-objekt m. forbindelse oprettes
     with Database(
-        DB.localusername, DB.localpassword,
+        DB.username, DB.password,
         "ProductDB",
-        DB.localhost, DB.port,
+        DB.host, DB.port,
         preview=False
     ) as source_db:
         # De fire tabeller gemmes i InterTable-formatet
@@ -270,9 +270,9 @@ def main() -> bool:
 
     # Opretter et nyt database-objekt
     with Database(
-        DB.localusername, DB.localpassword,
+        DB.username, DB.password,
         "bikecorpdb",
-        DB.localhost, DB.port,
+        DB.host, DB.port,
         preview=False,
         init_load=load_tuple
     ) as target_db:

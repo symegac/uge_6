@@ -13,7 +13,7 @@ api_tables = tuple(table[1:] for table in api_response["paths"])
 input(api_tables)
 
 # Forbinder til database
-with Database(DB.localusername, DB.localpassword, DB.database, host=DB.localhost, port=DB.port) as source_db:
+with Database(DB.username, DB.password, DB.database, host=DB.localhost, port=DB.port) as source_db:
     # Finder info om tabeller i databasen
     db_tables = source_db.info()
 input(db_tables)
